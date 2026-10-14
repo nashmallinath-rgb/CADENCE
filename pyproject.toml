@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cadence"
+version = "0.0.0"
+description = "Closed-loop multi-objective prompt optimization (scaffolding only)"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "litellm==1.105.1",
+    "dspy==3.4.1",
+    "pymoo==0.6.2",
+    "deap==1.4.4",
+    "scikit-learn==1.9.1",
+    "scipy==1.18.1",
+    "numpy==2.5.4",
+    "pandas==3.0.6",
+    "mlflow==3.17.1",
+    "tiktoken==0.14.0",
+    "matplotlib==3.11.2",
+    "pydantic==2.14.1",
+    "pyyaml==6.0.3",
+    "python-dotenv==1.2.4",
+    "tenacity==9.2.1",
+    "diskcache==5.6.3",
+    "datasets==5.1.0",
+    "beautifulsoup4==4.15.0",
+    "html5lib==1.1",
+    "jiwer==4.0.0",
+    "pytest==9.1.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+cadence = "cadence.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cadence*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
