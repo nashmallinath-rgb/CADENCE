@@ -1,0 +1,14 @@
+# CADENCE role -> LiteLLM model slots.
+# VERIFY every name against your Gemini and xAI keys before any paid run.
+# LiteLLM prefixes: gemini/<model>, xai/<model>
+# Placeholders below are starting guesses, not guaranteed to be enabled on your account.
+
+roles:
+  generator: gemini/gemini-2.0-flash
+  reflector: xai/grok-3
+  cheap_judge: gemini/gemini-2.0-flash
+  strong_judge: xai/grok-3
+  second_family_judge: gemini/gemini-2.0-flash
+  image_gen: gemini/imagen-3.0-generate-002
+  tts: gemini/gemini-2.5-flash-preview-tts
+  asr_or_audio_judge: gemini/gemini-2.0-flash
