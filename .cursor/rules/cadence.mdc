@@ -1,0 +1,24 @@
+---
+description: CADENCE project conventions for every session
+alwaysApply: true
+---
+
+# CADENCE conventions
+
+- Python **3.12** only (`py -3.12`). Do not use 3.13/3.14.
+- Type hints on public functions. Pydantic models for configs and schemas.
+- No secrets in code, commits, tests, or logs. Never print API keys.
+- Every LLM call goes through `cadence.llm` (cached, retried, budget-checked). Do not call LiteLLM/providers directly from other packages.
+- Tests live next to behavior under `tests/`. They must use `MockClient` and must not use the network.
+- Small focused commits. Never commit to `main`. Work on a phase branch and open a PR.
+- Keep functions pure where possible (no hidden I/O or global mutation).
+
+```python
+# BAD: provider call outside cadence.llm
+import litellm
+litellm.completion(model=role, messages=messages)
+
+# GOOD: go through the wrapper (budget + cache + retry)
+from cadence.llm.client import cached_complete
+cached_complete(role="cheap_judge", messages=messages)
+```
