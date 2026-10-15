@@ -12,6 +12,36 @@ default:
   verify: true
 
 models:
+  # Gemini: ai.google.dev/gemini-api/docs/pricing (paid-tier list prices; free tier bills $0 but we use list price so cost objectives stay comparable)
+  gemini/gemini-3.1-flash-lite:
+    input_per_mtok: 0.25
+    output_per_mtok: 1.50
+    verify: false
+  gemini/gemini-3.5-flash-lite:
+    input_per_mtok: 0.30
+    output_per_mtok: 2.50
+    verify: false
+  gemini/gemini-2.5-flash:
+    input_per_mtok: 0.30
+    output_per_mtok: 2.50
+    verify: false
+  gemini/gemini-2.5-flash-lite:
+    input_per_mtok: 0.10
+    output_per_mtok: 0.40
+    verify: false
+  # OpenAI: NOT verified (pricing page was unreachable); values are from memory. Check platform.openai.com/docs/pricing.
+  openai/gpt-4.1-nano:
+    input_per_mtok: 0.10
+    output_per_mtok: 0.40
+    verify: true
+  openai/gpt-4.1-mini:
+    input_per_mtok: 0.40
+    output_per_mtok: 1.60
+    verify: true
+  openai/gpt-4.1:
+    input_per_mtok: 2.00
+    output_per_mtok: 8.00
+    verify: true
   gemini/gemini-2.0-flash:
     input_per_mtok: 0.10
     output_per_mtok: 0.40

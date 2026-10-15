@@ -1,0 +1,6 @@
+{"id": "h1", "question": "Which country is Paris in?", "answer": "France", "type": "bridge", "level": "easy", "context": {"title": ["T1a", "T1b"], "sentences": [["Paris is in France.", "It is big."], ["Berlin is in Germany."]]}}
+{"id": "h2", "question": "Is Berlin in Germany?", "answer": "yes", "type": "comparison", "level": "easy", "context": {"title": ["T2a", "T2b"], "sentences": [["Paris is in France.", "It is big."], ["Berlin is in Germany."]]}}
+{"id": "h3", "question": "Q3", "answer": "The Beatles", "type": "bridge", "level": "hard", "context": {"title": ["T3a", "T3b"], "sentences": [["Paris is in France.", "It is big."], ["Berlin is in Germany."]]}}
+{"id": "h4", "question": "Q4", "answer": "A", "type": "bridge", "level": "hard", "context": {"title": ["T4a", "T4b"], "sentences": [["Paris is in France.", "It is big."], ["Berlin is in Germany."]]}}
+{"id": "h5", "question": "Q5", "answer": "B", "type": "bridge", "level": "hard", "context": {"title": ["T5a", "T5b"], "sentences": [["Paris is in France.", "It is big."], ["Berlin is in Germany."]]}}
+{"id": "h6", "question": "Q6", "answer": "C", "type": "bridge", "level": "hard", "context": {"title": ["T6a", "T6b"], "sentences": [["Paris is in France.", "It is big."], ["Berlin is in Germany."]]}}

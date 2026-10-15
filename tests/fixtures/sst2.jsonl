@@ -1,0 +1,8 @@
+{"idx": 0, "sentence": "a gorgeous, witty film", "label": 1}
+{"idx": 1, "sentence": "dull and lifeless", "label": 0}
+{"idx": 2, "sentence": "loved it", "label": 1}
+{"idx": 3, "sentence": "hated it", "label": 0}
+{"idx": 4, "sentence": "fine", "label": 1}
+{"idx": 5, "sentence": "awful", "label": 0}
+{"idx": 6, "sentence": "great", "label": 1}
+{"idx": 7, "sentence": "bad", "label": 0}

@@ -62,4 +62,6 @@ def test_repo_pricing_yaml_loads_and_is_flagged_unverified() -> None:
     pricing = load_pricing()
     assert "xai/grok-3" in pricing.models
     assert pricing.default.input_per_mtok > 0
-    assert set(pricing.unverified()) == set(pricing.models)  # nothing verified yet
+    assert set(pricing.unverified()) <= set(pricing.models)
+    assert "openai/gpt-4.1-mini" in pricing.unverified()  # still to be checked by a human
+    assert "gemini/gemini-3.1-flash-lite" not in pricing.unverified()  # verified against Google's page

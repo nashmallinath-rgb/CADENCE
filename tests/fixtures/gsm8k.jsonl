@@ -1,0 +1,10 @@
+{"question": "Tom has 3 apples and buys 4 more. How many apples?", "answer": "3+4=<<3+4=7>>7\n#### 7"}
+{"question": "A box holds 1,200 pens. Two boxes?", "answer": "1200*2=2400\n#### 2,400"}
+{"question": "Cost is $5 each for 3 items?", "answer": "5*3=15\n#### 15"}
+{"question": "Half of 9?", "answer": "9/2=4.5\n#### 4.5"}
+{"question": "Sub 10 from 4?", "answer": "4-10=-6\n#### -6"}
+{"question": "Q6", "answer": "#### 1"}
+{"question": "Q7", "answer": "#### 2"}
+{"question": "Q8", "answer": "#### 3"}
+{"question": "Q9", "answer": "#### 4"}
+{"question": "Q10", "answer": "#### 5"}
