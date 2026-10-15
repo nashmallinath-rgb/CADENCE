@@ -67,7 +67,7 @@ docs/              notes
 - [x] Phase 1 — LiteLLM wrapper (cache, retry, throttle, budget)
 - [x] Phase 2 — cost accounting and pricing table
 - [x] Phase 3 — Pareto archive / non-dominated sorting
-- [ ] Phase 4 — judges, cascade, validator
+- [x] Phase 4 — judges, cascade, validator
 - [ ] Phase 5 — DSPy orchestrator loop
 - [ ] Phase 6 — modality tasks (text, code/web, image, audio)
 - [ ] Phase 7 — MLflow tracking
