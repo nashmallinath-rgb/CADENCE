@@ -1,0 +1,32 @@
+# USD per 1,000,000 tokens (and per unit for media). EVERY VALUE HERE IS A PLACEHOLDER.
+# Provider prices change often. Check each model against the provider's current pricing
+# page, then set `verify: false`. Costs drive the Pareto front, so wrong prices mean a
+# wrong front. `python -m cadence.cli` will warn while any used model is still unverified.
+#
+# Unknown models fall back to `default`, which is deliberately pessimistic so the budget
+# guard errs on the side of stopping early.
+
+default:
+  input_per_mtok: 5.00
+  output_per_mtok: 15.00
+  verify: true
+
+models:
+  gemini/gemini-2.0-flash:
+    input_per_mtok: 0.10
+    output_per_mtok: 0.40
+    verify: true
+  xai/grok-3:
+    input_per_mtok: 3.00
+    output_per_mtok: 15.00
+    verify: true
+  gemini/imagen-3.0-generate-002:
+    units:
+      images: 0.03
+    verify: true
+  gemini/gemini-2.5-flash-preview-tts:
+    input_per_mtok: 0.50
+    output_per_mtok: 10.00
+    units:
+      audio_seconds: 0.0
+    verify: true
