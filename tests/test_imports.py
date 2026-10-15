@@ -1,6 +1,7 @@
 """Import every public subpackage. No network."""
 
 from cadence.llm import MockClient
+from cadence.schemas import GenRequest
 
 
 def test_import_all_subpackages() -> None:
@@ -22,6 +23,7 @@ def test_import_all_subpackages() -> None:
     assert cadence.tasks.Task is not None
 
 
-def test_mock_client_returns_canned_reply() -> None:
-    client = MockClient()
-    assert client.complete([{"role": "user", "content": "hi"}]) == "mock-ok"
+def test_mock_client_returns_text_and_usage() -> None:
+    text, usage = MockClient().complete(GenRequest(role="generator", messages=[{"role": "user", "content": "hi"}]))
+    assert text.startswith("mock:generator:")
+    assert usage.usd == 0.0
