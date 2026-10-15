@@ -49,6 +49,7 @@ class CascadeConfig(BaseModel):
     delta: float = Field(default=2.0, ge=0.0)
     cheap_trials: int = Field(default=3, ge=1)
     strong_trials: int = Field(default=3, ge=1)
+    kappa_min: float = Field(default=0.60, ge=-1.0, le=1.0)  # judge flagged below this
 
 
 class LLMSettings(BaseModel):
