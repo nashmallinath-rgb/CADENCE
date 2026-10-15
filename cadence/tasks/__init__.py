@@ -1,5 +1,6 @@
-"""Task interfaces and modality streams (stubs)."""
+"""Task interfaces and modality streams."""
+from cadence.tasks.base import Split, Task
+from cadence.tasks.registry import TASKS, get_task
+from cadence.tasks.splits import assign_split, select
 
-from cadence.tasks.base import Task
-
-__all__ = ["Task"]
+__all__ = ["Task", "Split", "TASKS", "get_task", "assign_split", "select"]

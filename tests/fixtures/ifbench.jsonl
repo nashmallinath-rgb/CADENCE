@@ -1,0 +1,4 @@
+{"key": "k1", "prompt": "Write a haiku about rain without using the letter e.", "instruction_id_list": ["letters:forbidden"], "kwargs": [{}]}
+{"key": "k2", "prompt": "List three fruits in all caps.", "instruction_id_list": ["change_case:all_caps"], "kwargs": [{}]}
+{"key": "k3", "prompt": "Reply in under 20 words.", "instruction_id_list": ["length:max_words"], "kwargs": [{}]}
+{"key": "k4", "prompt": "P4", "instruction_id_list": [], "kwargs": []}
