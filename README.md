@@ -6,7 +6,7 @@ Pipeline (not implemented yet): Input → Prompt Generator (DSPy, reflective evo
 
 Four modality streams share one orchestrator and one Pareto schema: (1) text/reasoning, (2) code and web UI, (3) image generation, (4) audio/TTS.
 
-LLM access is **Gemini and Grok (xAI) only**, always through LiteLLM.
+LLM access is **Gemini and OpenAI (via LiteLLM; Groq optional)**, always through LiteLLM.
 
 **Status:** phase-0 scaffolding only. No optimization logic yet.
 
@@ -23,7 +23,7 @@ python -m pip install -e .
 copy .env.example .env
 ```
 
-Edit `.env` and set `GEMINI_API_KEY` and `XAI_API_KEY`. Do not commit `.env`.
+Edit `.env` and set `GEMINI_API_KEY` and `OPENAI_API_KEY`. Do not commit `.env`.
 
 Smoke-test providers (prints OK/FAIL and model names, never key values):
 

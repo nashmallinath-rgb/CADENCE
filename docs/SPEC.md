@@ -31,7 +31,7 @@ Dataset ids (verify on HuggingFace before relying on them): `openai/gsm8k` (main
 
 ## 4. Constraints
 - Windows + PowerShell, Python 3.12 only, LF line endings.
-- Providers: **Gemini and Grok (xAI) only**, always through LiteLLM and `cadence.llm`. No direct SDK calls except where LiteLLM lacks image/audio support (then add one adapter in `cadence/llm/`).
+- Providers: **Gemini and OpenAI (Groq optional)**, always through LiteLLM and `cadence.llm`. No direct SDK calls except where LiteLLM lacks image/audio support (then add one adapter in `cadence/llm/`).
 - No secrets in code, logs or git. `.env` only.
 - **Mock-first**: every module is fully testable offline via `MockClient`. Real-API runs are manual, gated by `budget.yaml` caps.
 - Determinism: all randomness takes a seed from config.

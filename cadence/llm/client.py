@@ -64,6 +64,7 @@ def litellm_backend(model: str, messages: list[dict[str, Any]], params: dict[str
     """Real provider call through LiteLLM. Imported lazily so tests never load it."""
     import litellm
 
+    litellm.drop_params = True  # reasoning models reject e.g. temperature
     resp = litellm.completion(model=model, messages=messages, **params)
     text = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)
