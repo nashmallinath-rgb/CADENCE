@@ -4,3 +4,4 @@ tau: 0.70           # escalate to the strong judge if mean cheap-judge confidenc
 delta: 2.0          # ...or if the spread (max - min) of cheap-judge trial scores > delta
 cheap_trials: 3
 strong_trials: 3
+kappa_min: 0.60     # judge is flagged when Cohen's kappa vs ground truth is below this
