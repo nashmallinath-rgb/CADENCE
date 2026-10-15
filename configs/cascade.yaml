@@ -1,0 +1,6 @@
+# Cost-aware evaluation cascade (docs/ARCHITECTURE.md, cascade).
+# Judge scores are 0-10; confidence is 0-1.
+tau: 0.70           # escalate to the strong judge if mean cheap-judge confidence < tau
+delta: 2.0          # ...or if the spread (max - min) of cheap-judge trial scores > delta
+cheap_trials: 3
+strong_trials: 3
