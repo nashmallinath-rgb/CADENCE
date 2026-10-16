@@ -39,6 +39,19 @@ models:
     input_per_mtok: 0.0
     output_per_mtok: 0.0
     verify: true
+  # Groq free tier: priced 0 so judge calls do not eat the budget. Paid prices NOT confirmed; revisit on a paid key.
+  groq/openai/gpt-oss-20b:
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
+    verify: true
+  groq/openai/gpt-oss-120b:
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
+    verify: true
+  groq/qwen/qwen3.8-27b:
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
+    verify: true
   # OpenAI: NOT verified (pricing page was unreachable); values are from memory. Check platform.openai.com/docs/pricing.
   openai/gpt-4.1-nano:
     input_per_mtok: 0.10

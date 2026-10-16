@@ -1,18 +1,16 @@
 # CADENCE role -> LiteLLM model slots.
-# LiteLLM prefixes: gemini/<model>, openai/<model>
-# Chosen from scripts/probe_models.py results (Oct 16): only models that answered quickly and returned parseable
-# judge JSON. Avoid *-latest aliases (the underlying model, and its price, can change under us).
+# LiteLLM prefixes: gemini/<model>, groq/<model>, openai/<model>
+# Chosen from scripts/probe_models.py results (Oct 16): every model here answered and returned parseable judge JSON.
+# Three independent families: Gemini generates, OpenAI-weights (gpt-oss) judge, Qwen is the second-family judge.
+# Avoid *-latest aliases: the underlying model, and its price, can change under us.
 # Run `python -m cadence.cli check-setup` to confirm each role answers.
-#
-# CAVEAT: with no OpenAI credit every role is a Google model. Judges are Gemma (a different model line from the
-# Gemini generator) but the same vendor. A truly independent family (Groq gpt-oss/Qwen, or funded OpenAI) is the upgrade.
 
 roles:
-  generator: gemini/gemini-3.5-flash-lite        # 1.6s in probe; free tier; the model whose prompts we optimize
+  generator: gemini/gemini-3.5-flash-lite        # the model whose prompts we optimize; free tier, high volume
   reflector: gemini/gemini-3.1-flash-lite        # rewrites prompts (few calls per run)
-  cheap_judge: gemini/gemma-4-26b-a4b-it         # 5.3s in probe
-  strong_judge: gemini/gemma-4-31b-it            # 51.7s in probe; escalations only
-  second_family_judge: gemini/gemini-3.1-flash-lite  # held-out check; same family as generator, so self-preference is measured
+  cheap_judge: groq/openai/gpt-oss-20b           # first-pass judge, ~0.5s
+  strong_judge: groq/openai/gpt-oss-120b         # escalations only, ~0.7s
+  second_family_judge: groq/qwen/qwen3.8-27b     # held-out check: a third family (Alibaba), ~0.4s
   image_gen: gemini/imagen-3.0-generate-002      # placeholder until Phase 7
   tts: gemini/gemini-2.5-flash-preview-tts       # placeholder until Phase 7
   asr_or_audio_judge: gemini/gemini-2.0-flash    # placeholder until Phase 7
