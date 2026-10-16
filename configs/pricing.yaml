@@ -29,6 +29,16 @@ models:
     input_per_mtok: 0.10
     output_per_mtok: 0.40
     verify: false
+  # Gemma 4: free on the Gemini API free tier; paid price NOT confirmed (page was truncated). Priced 0 so judge calls
+  # do not eat the budget; revisit if you move to a paid key.
+  gemini/gemma-4-26b-a4b-it:
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
+    verify: true
+  gemini/gemma-4-31b-it:
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
+    verify: true
   # OpenAI: NOT verified (pricing page was unreachable); values are from memory. Check platform.openai.com/docs/pricing.
   openai/gpt-4.1-nano:
     input_per_mtok: 0.10

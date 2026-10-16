@@ -65,6 +65,9 @@ def litellm_backend(model: str, messages: list[dict[str, Any]], params: dict[str
     import litellm
 
     litellm.drop_params = True  # reasoning models reject e.g. temperature
+    # Fail slow calls fast (the tenacity retry layer handles Timeout) and keep all retrying in one place so the
+    # budget guard and retry stats see every call; LiteLLM's own retries are disabled.
+    params = {"timeout": 90, "num_retries": 0, **params}
     resp = litellm.completion(model=model, messages=messages, **params)
     text = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)

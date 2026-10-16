@@ -1,14 +1,18 @@
 # CADENCE role -> LiteLLM model slots.
 # LiteLLM prefixes: gemini/<model>, openai/<model>
-# Names below were checked against the models our keys list (scripts/list_models.py).
-# Run `python -m cadence.cli check-setup` to confirm each role actually answers.
+# Chosen from scripts/probe_models.py results (Oct 16): only models that answered quickly and returned parseable
+# judge JSON. Avoid *-latest aliases (the underlying model, and its price, can change under us).
+# Run `python -m cadence.cli check-setup` to confirm each role answers.
+#
+# CAVEAT: with no OpenAI credit every role is a Google model. Judges are Gemma (a different model line from the
+# Gemini generator) but the same vendor. A truly independent family (Groq gpt-oss/Qwen, or funded OpenAI) is the upgrade.
 
 roles:
-  generator: gemini/gemini-3.1-flash-lite        # free tier; the model whose prompts we optimize
-  reflector: gemini/gemini-2.5-flash             # free tier; rewrites prompts
-  cheap_judge: openai/gpt-4.1-mini               # paid, non-reasoning (accepts temperature)
-  strong_judge: openai/gpt-4.1                   # paid, escalation only
-  second_family_judge: gemini/gemini-2.5-flash   # held-out check; same family as generator (self-preference gap is measured)
+  generator: gemini/gemini-3.5-flash-lite        # 1.6s in probe; free tier; the model whose prompts we optimize
+  reflector: gemini/gemini-3.1-flash-lite        # rewrites prompts (few calls per run)
+  cheap_judge: gemini/gemma-4-26b-a4b-it         # 5.3s in probe
+  strong_judge: gemini/gemma-4-31b-it            # 51.7s in probe; escalations only
+  second_family_judge: gemini/gemini-3.1-flash-lite  # held-out check; same family as generator, so self-preference is measured
   image_gen: gemini/imagen-3.0-generate-002      # placeholder until Phase 7
   tts: gemini/gemini-2.5-flash-preview-tts       # placeholder until Phase 7
   asr_or_audio_judge: gemini/gemini-2.0-flash    # placeholder until Phase 7
