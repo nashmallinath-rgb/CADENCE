@@ -42,7 +42,8 @@ class TextTask(Task):
             self._examples = [self.to_example(i, r) for i, r in enumerate(self._records)]
             ids = [e.id for e in self._examples]
             if len(set(ids)) != len(ids):
-                raise ValueError(f"duplicate example ids in {self.name}")
+                dups = sorted({i for i in ids if ids.count(i) > 1})[:5]
+                raise ValueError(f"duplicate example ids in {self.name}, e.g. {dups}")
         return self._examples
 
     def load(self, split: Split, n: int | None = None, seed: int = 0) -> list[Example]:
@@ -99,7 +100,8 @@ class Sst2Task(TextTask):
     def to_example(self, i: int, rec: dict[str, Any]) -> Example:
         if rec["label"] not in (0, 1):
             raise ValueError("SST-2 rows must have label 0 or 1 (drop the unlabeled test split)")
-        return Example(id=f"sst2-{rec.get('idx', i)}", input={"sentence": rec["sentence"]},
+        # not rec["idx"]: train and validation both number rows from 0, so pooled idx values collide
+        return Example(id=f"sst2-{i}", input={"sentence": rec["sentence"]},
                        reference="positive" if rec["label"] == 1 else "negative")
 
     def seed_prompt(self) -> str:

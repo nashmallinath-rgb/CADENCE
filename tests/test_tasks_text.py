@@ -162,3 +162,17 @@ def test_registry() -> None:
     assert get_task("toy").name == "toy"
     with pytest.raises(KeyError, match="available"):
         get_task("nope")
+
+
+def test_sst2_pooled_splits_with_colliding_idx_still_load() -> None:
+    # HF train and validation both number rows from 0; the fetch script pools them
+    rows = [{"idx": i % 40, "sentence": f"s{i}", "label": i % 2} for i in range(80)]
+    task = Sst2Task(records=rows)
+    ids = [e.id for s in ("opt", "heldout", "calib") for e in task.load(s)]
+    assert len(ids) == 80 and len(set(ids)) == 80
+
+
+def test_duplicate_ids_error_names_the_offenders() -> None:
+    rows = [{"id": "dup", "question": "q", "answer": "a", "context": {"title": [], "sentences": []}}] * 2
+    with pytest.raises(ValueError, match="dup"):
+        HotpotQATask(records=rows).load("opt")
