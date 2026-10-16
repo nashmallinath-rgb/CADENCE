@@ -28,6 +28,27 @@ CANDIDATES = [
     "gemini/gemma-4-31b-it",
     "gemini/gemma-4-26b-a4b-it",
 ]
+SKIP = ("whisper", "tts", "guard", "playai", "embed", "orpheus", "transcribe", "safeguard")
+
+
+def groq_chat_models() -> list[str]:
+    """Discover Groq chat models from the key's own model list (None if no key / lookup fails)."""
+    import json
+    import urllib.request
+
+    key = (os.getenv("GROQ_API_KEY") or "").strip()
+    if not key:
+        return []
+    try:
+        req = urllib.request.Request("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            ids = [m["id"] for m in json.load(r).get("data", [])]
+    except Exception:  # noqa: BLE001
+        print("(could not list Groq models; check GROQ_API_KEY)")
+        return []
+    return ["groq/" + i for i in sorted(ids) if not any(w in i.lower() for w in SKIP)]
+
+
 JUDGE_PROMPT = ('Rate "2+2=4" for correctness. Reply with ONLY JSON: '
                 '{"score": <0-10>, "confidence": <0-1>, "rationale": "<short>"}')
 
@@ -50,4 +71,5 @@ def main(models: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or CANDIDATES)
+    load_dotenv(ROOT / ".env")
+    main(sys.argv[1:] or CANDIDATES + groq_chat_models())

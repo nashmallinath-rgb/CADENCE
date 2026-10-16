@@ -1,7 +1,7 @@
 """List the model IDs your API keys can use. Prints model names only, never keys.
 
 Run from the repo root:  python scripts/list_models.py
-Reads GEMINI_API_KEY and OPENAI_API_KEY from .env (or the environment).
+Reads GEMINI_API_KEY, OPENAI_API_KEY and GROQ_API_KEY from .env (or the environment).
 """
 from __future__ import annotations
 
@@ -36,6 +36,11 @@ def openai(key: str) -> list[str]:
     return sorted(m["id"] for m in data.get("data", []))
 
 
+def groq(key: str) -> list[str]:
+    data = get("https://api.groq.com/openai/v1/models", {"Authorization": f"Bearer {key}"})
+    return sorted(m["id"] for m in data.get("data", []))
+
+
 def show(title: str, env: str, fn) -> None:  # type: ignore[no-untyped-def]
     print(f"\n== {title} ==")
     key = os.getenv(env, "").strip()
@@ -58,4 +63,5 @@ def show(title: str, env: str, fn) -> None:  # type: ignore[no-untyped-def]
 if __name__ == "__main__":
     show("Gemini (usable for chat)", "GEMINI_API_KEY", gemini)
     show("OpenAI", "OPENAI_API_KEY", openai)
+    show("Groq (use as groq/<id>)", "GROQ_API_KEY", groq)
     sys.exit(0)
