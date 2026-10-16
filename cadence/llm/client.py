@@ -127,7 +127,8 @@ class LLMClient:
 
     # -- construction from the repo configs ------------------------------------------
     @classmethod
-    def from_config(cls, *, seed: int | None = None, cache_dir: Path | None = None) -> LLMClient:
+    def from_config(cls, *, seed: int | None = None, cache_dir: Path | None = None,
+                    budget: BudgetGuard | None = None) -> LLMClient:
         from dotenv import load_dotenv
 
         from cadence.config import ROOT, load_budget_config, load_models_config, load_run_config
@@ -139,7 +140,7 @@ class LLMClient:
         directory.mkdir(parents=True, exist_ok=True)
         return cls(
             load_models_config().roles.model_dump(),
-            budget=BudgetGuard.from_config(load_budget_config()),
+            budget=budget or BudgetGuard.from_config(load_budget_config()),
             pricing=load_pricing(),
             cache=DiskCache(directory),
             rpm=run.llm.rpm,

@@ -26,6 +26,7 @@ class JudgeHealth(BaseModel):
     kappa_min: float
     flagged: bool
     rechecked: bool = False
+    scores: list[float] = Field(default_factory=list)  # per-item mean judge score (0-10), same order as items
     usage: Usage = Field(default_factory=Usage)
 
 
@@ -53,7 +54,7 @@ def calibrate(judge: Judge, items: Sequence[CalibItem], kappa_min: float = 0.60,
         v = icc_2_1(matrix)
         icc = None if math.isnan(v) else v
     return JudgeHealth(kappa=kappa, icc=icc, n=len(items), trials=judge.trials, kappa_min=kappa_min,
-                       flagged=kappa < kappa_min, usage=usage)
+                       flagged=kappa < kappa_min, usage=usage, scores=scores)
 
 
 def calibrate_with_recheck(judge: Judge, items: Sequence[CalibItem], kappa_min: float = 0.60,
