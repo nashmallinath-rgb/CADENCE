@@ -17,7 +17,8 @@ load_dotenv()
 
 
 def get(url: str, headers: dict[str, str]) -> dict:
-    req = urllib.request.Request(url, headers=headers)
+    # Some providers (Groq sits behind Cloudflare) reject urllib's default "Python-urllib" User-Agent with a 403.
+    req = urllib.request.Request(url, headers={"User-Agent": "cadence-setup/0.1", **headers})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 
@@ -50,7 +51,8 @@ def show(title: str, env: str, fn) -> None:  # type: ignore[no-untyped-def]
     try:
         names = fn(key)
     except urllib.error.HTTPError as e:  # message only; the request headers (and key) are never printed
-        print(f"HTTP {e.code}: the key was rejected or lacks access.")
+        body = e.read().decode("utf-8", errors="replace")[:160].replace(key, "[KEY]")
+        print(f"HTTP {e.code}: {body!r}")
         return
     except Exception as e:  # noqa: BLE001
         print(f"Failed: {type(e).__name__}")
