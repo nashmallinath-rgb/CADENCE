@@ -31,6 +31,7 @@ def _call(model: str, prompt: str, max_tokens: int) -> str:
     import litellm
 
     litellm.drop_params = True  # e.g. reasoning models reject temperature
+    litellm.suppress_debug_info = True
     resp = litellm.completion(model=model, messages=[{"role": "user", "content": prompt}], max_tokens=max_tokens)
     return resp.choices[0].message.content or ""
 
