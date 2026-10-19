@@ -111,7 +111,8 @@ def run_smoke(client: Any, tasks: Mapping[str, Task], *, n: int = 10, trials: in
                 continue
             health_scores[role] = h.scores
             judges[role] = {"kappa": h.kappa, "icc": h.icc, "flagged": h.flagged, "n": h.n,
-                            "seconds": time.perf_counter() - t0}
+                            "seconds": time.perf_counter() - t0, "parse_failures": h.parse_failures,
+                            "misses": h.misses}
         trow["judges"] = judges
 
         if "cheap_judge" in health_scores and "second_family_judge" in health_scores:
@@ -159,7 +160,16 @@ def format_report(rep: dict[str, Any], kappa_min: float = 0.60) -> str:
                 lines.append(f"  {role:20} ERROR {j['error']}")
             else:
                 lines.append(f"  {role:20} kappa {j['kappa']:.2f}  icc {f(j['icc'])}  "
-                             f"{'FLAGGED' if j['flagged'] else 'ok':8} ({j['seconds']:.0f}s)")
+                             f"{'FLAGGED' if j['flagged'] else 'ok':8} ({j['seconds']:.0f}s)"
+                             + (f"  unparseable replies: {j['parse_failures']}" if j.get("parse_failures") else ""))
+                if j["flagged"]:
+                    for m in j.get("misses", [])[:3]:
+                        lines.append(f"      miss {m['id']}: truth={'correct' if m['truth_correct'] else 'WRONG'}, "
+                                     f"judge scored {m['judge_score']} (conf {m['confidence']}): {m['rationale']!r}")
+                        lines.append(f"           response ends: {m['response']!r}")
+                    if j["icc"] is not None and j["icc"] >= 0.9:
+                        lines.append("      note: consistent across trials but wrong, so more trials will not fix it; "
+                                     "change the judge model or the rubric")
         if "inter_judge_kappa" in t:
             lines.append(f"  inter-judge kappa (cheap vs second-family): {t['inter_judge_kappa']:.2f}")
         if "cascade" in t:

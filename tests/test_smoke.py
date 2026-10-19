@@ -129,3 +129,37 @@ def test_cli_smoke_reports_missing_data(monkeypatch, tmp_path, capsys) -> None: 
     monkeypatch.setattr("cadence.tasks.get_task", lambda name: Gsm8kTask(path=tmp_path / "missing.jsonl"))
     assert cli.main(["smoke", "--tasks", "gsm8k", "--mock", "--out", str(tmp_path / "r.json")]) == 1
     assert "fetch_data.py gsm8k" in capsys.readouterr().out
+
+
+def test_flagged_judge_report_explains_itself() -> None:
+    rep = run_smoke(make_client(cheap_judge=noisy_judge(0.5)), {"sst2": Sst2Task(records=SST)}, n=8, trials=2,
+                    log=lambda m: None)
+    j = rep["tasks"]["sst2"]["judges"]["cheap_judge"]
+    assert j["flagged"] and 1 <= len(j["misses"]) <= 5 and {"id", "judge_score", "rationale", "response"} <= set(j["misses"][0])
+    assert "miss sst2-" in format_report(rep)
+
+
+def test_unparseable_judge_replies_are_counted_and_shown() -> None:
+    rep = run_smoke(make_client(cheap_judge=lambda req: "I think it is fine."), {"sst2": Sst2Task(records=SST)}, n=8,
+                    trials=2, log=lambda m: None)
+    j = rep["tasks"]["sst2"]["judges"]["cheap_judge"]
+    assert j["parse_failures"] == 2 * rep["tasks"]["sst2"]["calibration_items"]
+    assert "unparseable replies" in format_report(rep)
+
+
+def test_flagged_judge_report_lists_misjudged_items_and_explains_consistent_errors() -> None:
+    # a judge that is always wrong but identical across trials: kappa -1, ICC 1
+    def inverted(req: GenRequest) -> str:
+        d = json.loads(perfect_judge(req))
+        d["score"] = 10 - d["score"]
+        return json.dumps(d)
+
+    rep = run_smoke(make_client(cheap_judge=inverted), {"sst2": Sst2Task(records=SST)}, n=8, trials=2,
+                    log=lambda m: None)
+    j = rep["tasks"]["sst2"]["judges"]["cheap_judge"]
+    assert j["flagged"] and j["kappa"] == pytest.approx(-1.0) and j["icc"] == pytest.approx(1.0)
+    text = format_report(rep)
+    assert "miss sst2-" in text and "response ends:" in text
+    assert "consistent across trials but wrong" in text
+    healthy = format_report(run_smoke(make_client(), {"sst2": Sst2Task(records=SST)}, n=8, trials=2, log=lambda m: None))
+    assert "miss sst2-" not in healthy and "consistent across trials" not in healthy
