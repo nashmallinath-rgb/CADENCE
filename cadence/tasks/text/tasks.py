@@ -63,8 +63,12 @@ class Gsm8kTask(TextTask):
         return float(metrics.numeric_equal(metrics.extract_number(out.text or ""), str(ex.reference)))
 
     def calibration_rubric(self, ex: Example) -> str | None:
-        return ("The task is a grade-school math word problem. Work it out yourself, then score 10 if the response's "
-                "final numeric answer is correct and 0 if it is wrong.")
+        return ("The task is a grade-school math word problem. Work it out yourself. The response states its final "
+                "answer on the line starting with '####'; that number is what counts. Score 10 if the number after '####' "
+                "is correct and 0 if it is wrong, even if the working above it looks right or disagrees with it.")
+
+    def degraded_prompt(self) -> str | None:
+        return "Reply with only the final number as '#### <number>'. Do not show any work. Guess quickly."
 
     def corrupt_output(self, ex: Example, text: str) -> str | None:
         return metrics.corrupt_last_number(text)

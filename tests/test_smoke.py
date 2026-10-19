@@ -163,3 +163,26 @@ def test_flagged_judge_report_lists_misjudged_items_and_explains_consistent_erro
     assert "consistent across trials but wrong" in text
     healthy = format_report(run_smoke(make_client(), {"sst2": Sst2Task(records=SST)}, n=8, trials=2, log=lambda m: None))
     assert "miss sst2-" not in healthy and "consistent across trials" not in healthy
+
+
+def test_weak_prompt_adds_naturally_wrong_items_and_per_source_accuracy() -> None:
+    def gen(req: GenRequest) -> str:
+        if "Guess quickly" in req.messages[0]["content"]:  # the degraded prompt: always wrong
+            return f"#### {int(REF[user_text(req)]) + 100}"
+        return f"#### {REF[user_text(req)]}"
+
+    rep = run_smoke(make_client(generator=gen), {"gsm8k": Gsm8kTask(records=GSM)}, n=8, trials=2, log=lambda m: None)
+    t = rep["tasks"]["gsm8k"]
+    assert t["accuracy"] == 1.0 and t["degraded_accuracy"] == 0.0
+    assert t["calibration_items"] == 24  # 8 genuine + 8 corrupted + 8 weak-prompt
+    by_src = t["judges"]["cheap_judge"]["verdicts_right_by_source"]
+    assert set(by_src) == {"genuine", "corrupted", "degraded"} and by_src["degraded"] == [8, 8]
+    text = format_report(rep)
+    assert "verdicts right by source: genuine 8/8" in text and "weak-prompt accuracy: 0.00" in text
+
+
+def test_gsm8k_rubric_points_the_judge_at_the_final_line() -> None:
+    ex = Gsm8kTask(records=GSM).load("calib", n=1)[0]
+    rubric = Gsm8kTask(records=GSM).calibration_rubric(ex)
+    assert rubric is not None and "####" in rubric and str(ex.reference) not in rubric  # never leaks the gold answer
+    assert Sst2Task(records=SST).degraded_prompt() is None

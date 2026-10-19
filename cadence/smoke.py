@@ -63,6 +63,17 @@ def run_smoke(client: Any, tasks: Mapping[str, Task], *, n: int = 10, trials: in
             gen_secs += time.perf_counter() - t0
             usages = usages + out.usage
             genuine.append((ex, out))
+        degraded: list[tuple[Example, Output]] = []
+        weak = task.degraded_prompt()
+        if weak is not None:
+            log(f"[{name}] generating {len(examples)} answers with a deliberately weak prompt (natural wrong answers)...")
+            for ex in examples:
+                try:
+                    degraded.append((ex, task.generate(client, task.build_request(weak, ex))))
+                except BudgetExceeded:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    report["errors"].append(f"{name} degraded-generate {ex.id}: {type(exc).__name__}")
         scores = [task.automatic_score(ex, out) or 0.0 for ex, out in genuine]
         k = max(1, len(genuine))
         trow: dict[str, Any] = {
@@ -73,6 +84,8 @@ def run_smoke(client: Any, tasks: Mapping[str, Task], *, n: int = 10, trials: in
             "avg_output_tokens": usages.output_tokens / k,
             "cost_usd_per_1k": 1000 * usages.usd / k,
         }
+        if weak is not None and degraded:
+            trow["degraded_accuracy"] = sum((task.automatic_score(e, o) or 0.0) for e, o in degraded) / len(degraded)
         report["tasks"][name] = trow
 
         # calibration set: genuine outputs + corrupted copies, all labelled by exact match
@@ -82,13 +95,18 @@ def run_smoke(client: Any, tasks: Mapping[str, Task], *, n: int = 10, trials: in
             rub = rubric_for(ex)
             if rub is None:
                 continue
-            items.append(CalibItem(example=ex, response_text=out.text or "", rubric=rub,
+            items.append(CalibItem(example=ex, response_text=out.text or "", rubric=rub, source="genuine",
                                    correct=(task.automatic_score(ex, out) or 0.0) >= 0.5))
             bad = task.corrupt_output(ex, out.text or "")
             if bad is not None:
                 bad_out = Output(kind="text", text=bad)
-                items.append(CalibItem(example=ex, response_text=bad, rubric=rub,
+                items.append(CalibItem(example=ex, response_text=bad, rubric=rub, source="corrupted",
                                        correct=(task.automatic_score(ex, bad_out) or 0.0) >= 0.5))
+        for ex, out in degraded:
+            rub = rubric_for(ex)
+            if rub is not None:
+                items.append(CalibItem(example=ex, response_text=out.text or "", rubric=rub, source="degraded",
+                                       correct=(task.automatic_score(ex, out) or 0.0) >= 0.5))
         n_correct = sum(i.correct for i in items)
         trow["calibration_items"] = len(items)
         trow["calibration_correct"] = n_correct
@@ -110,9 +128,14 @@ def run_smoke(client: Any, tasks: Mapping[str, Task], *, n: int = 10, trials: in
                 judges[role] = {"error": type(exc).__name__}
                 continue
             health_scores[role] = h.scores
+            by_source: dict[str, list[int]] = {}
+            for it, sc in zip(items, h.scores):
+                tally = by_source.setdefault(it.source or "?", [0, 0])
+                tally[0] += int((sc >= 5.0) == it.correct)
+                tally[1] += 1
             judges[role] = {"kappa": h.kappa, "icc": h.icc, "flagged": h.flagged, "n": h.n,
                             "seconds": time.perf_counter() - t0, "parse_failures": h.parse_failures,
-                            "misses": h.misses}
+                            "misses": h.misses, "verdicts_right_by_source": by_source}
         trow["judges"] = judges
 
         if "cheap_judge" in health_scores and "second_family_judge" in health_scores:
@@ -153,6 +176,8 @@ def format_report(rep: dict[str, Any], kappa_min: float = 0.60) -> str:
         lines.append(f"  generation: accuracy {f(t.get('accuracy'))} on {t['generated']} answers | "
                      f"{f(t['seconds_per_call'], '.1f')}s/call | avg {f(t['avg_input_tokens'], '.0f')} in / "
                      f"{f(t['avg_output_tokens'], '.0f')} out tokens | ${f(t['cost_usd_per_1k'], '.3f')} per 1k runs (list price)")
+        if t.get("degraded_accuracy") is not None:
+            lines.append(f"  weak-prompt accuracy: {t['degraded_accuracy']:.2f} (these natural wrong answers go into the calibration set)")
         if "calibration_items" in t:
             lines.append(f"  calibration set: {t['calibration_items']} items ({t['calibration_correct']} correct)")
         for role, j in t.get("judges", {}).items():
@@ -162,6 +187,9 @@ def format_report(rep: dict[str, Any], kappa_min: float = 0.60) -> str:
                 lines.append(f"  {role:20} kappa {j['kappa']:.2f}  icc {f(j['icc'])}  "
                              f"{'FLAGGED' if j['flagged'] else 'ok':8} ({j['seconds']:.0f}s)"
                              + (f"  unparseable replies: {j['parse_failures']}" if j.get("parse_failures") else ""))
+                if j.get("verdicts_right_by_source"):
+                    lines.append("      verdicts right by source: " + ", ".join(
+                        f"{src} {r}/{cnt}" for src, (r, cnt) in j["verdicts_right_by_source"].items()))
                 if j["flagged"]:
                     for m in j.get("misses", [])[:3]:
                         lines.append(f"      miss {m['id']}: truth={'correct' if m['truth_correct'] else 'WRONG'}, "

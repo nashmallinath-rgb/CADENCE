@@ -16,6 +16,7 @@ class CalibItem(BaseModel):
     response_text: str
     correct: bool  # ground truth from exact match or a human label
     rubric: str
+    source: str = ""  # where the item came from: genuine / degraded / corrupted (for per-source judge accuracy)
 
 
 class JudgeHealth(BaseModel):
