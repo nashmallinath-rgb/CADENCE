@@ -68,7 +68,7 @@ docs/              notes
 - [x] Phase 2 — cost accounting and pricing table
 - [x] Phase 3 — Pareto archive / non-dominated sorting
 - [x] Phase 4 — judges, cascade, validator
-- [ ] Phase 5 — DSPy orchestrator loop
+- [x] Phase 5 — DSPy orchestrator loop
 - [ ] Phase 6 — modality tasks (text, code/web, image, audio)
 - [ ] Phase 7 — MLflow tracking
 - [ ] Phase 8 — held-out benchmark + dual-judge
