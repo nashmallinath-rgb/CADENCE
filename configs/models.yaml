@@ -1,14 +1,16 @@
 # CADENCE role -> LiteLLM model slots.
-# LiteLLM prefixes: gemini/<model>, openai/<model>
-# Names below were checked against the models our keys list (scripts/list_models.py).
-# Run `python -m cadence.cli check-setup` to confirm each role actually answers.
+# LiteLLM prefixes: gemini/<model>, groq/<model>, openai/<model>
+# Chosen from scripts/probe_models.py results (Oct 16): every model here answered and returned parseable judge JSON.
+# Three independent families: Gemini generates, OpenAI-weights (gpt-oss) judge, Qwen is the second-family judge.
+# Avoid *-latest aliases: the underlying model, and its price, can change under us.
+# Run `python -m cadence.cli check-setup` to confirm each role answers.
 
 roles:
-  generator: gemini/gemini-3.1-flash-lite        # free tier; the model whose prompts we optimize
-  reflector: gemini/gemini-2.5-flash             # free tier; rewrites prompts
-  cheap_judge: openai/gpt-4.1-mini               # paid, non-reasoning (accepts temperature)
-  strong_judge: openai/gpt-4.1                   # paid, escalation only
-  second_family_judge: gemini/gemini-2.5-flash   # held-out check; same family as generator (self-preference gap is measured)
+  generator: gemini/gemini-3.5-flash-lite        # the model whose prompts we optimize; free tier, high volume
+  reflector: gemini/gemini-3.1-flash-lite        # rewrites prompts (few calls per run)
+  cheap_judge: groq/openai/gpt-oss-20b           # first-pass judge, ~0.5s
+  strong_judge: groq/openai/gpt-oss-120b         # escalations only, ~0.7s
+  second_family_judge: groq/qwen/qwen3.8-27b     # held-out check: a third family (Alibaba), ~0.4s
   image_gen: gemini/imagen-3.0-generate-002      # placeholder until Phase 7
   tts: gemini/gemini-2.5-flash-preview-tts       # placeholder until Phase 7
   asr_or_audio_judge: gemini/gemini-2.0-flash    # placeholder until Phase 7

@@ -33,6 +33,18 @@ class Task(ABC):
         """Judge rubric for tasks that cannot be scored automatically. Must never leak `ex.reference`."""
         return None
 
+    def calibration_rubric(self, ex: Example) -> str | None:
+        """Reference-free rubric used to check a judge against this task's exact-match ground truth (None = unsupported)."""
+        return None
+
+    def degraded_prompt(self) -> str | None:
+        """A deliberately weak prompt whose real (naturally wrong) answers enrich the calibration set (None = unsupported)."""
+        return None
+
+    def corrupt_output(self, ex: Example, text: str) -> str | None:
+        """A deliberately altered response, used to guarantee wrong answers in judge calibration sets (None = unsupported)."""
+        return None
+
     def format_input(self, ex: Example) -> str:
         return json.dumps(ex.input, ensure_ascii=False, sort_keys=True) if len(ex.input) != 1 else str(next(iter(ex.input.values())))
 

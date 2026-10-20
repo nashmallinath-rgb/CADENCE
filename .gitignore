@@ -44,3 +44,4 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+runs/

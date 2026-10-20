@@ -45,3 +45,4 @@ include = ["cadence*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+markers = ["e2e: end-to-end loop tests (offline, under 60 s)"]

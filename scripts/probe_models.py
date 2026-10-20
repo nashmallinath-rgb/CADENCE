@@ -28,6 +28,39 @@ CANDIDATES = [
     "gemini/gemma-4-31b-it",
     "gemini/gemma-4-26b-a4b-it",
 ]
+SKIP = ("whisper", "tts", "guard", "playai", "embed", "orpheus", "transcribe", "safeguard")
+
+
+GROQ_FALLBACK = ["groq/openai/gpt-oss-20b", "groq/openai/gpt-oss-120b"]  # tried if the model list can't be fetched
+
+
+def groq_chat_models() -> list[str]:
+    """Groq chat models from the key's own model list; falls back to a short known list if the lookup fails."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    key = (os.getenv("GROQ_API_KEY") or "").strip()
+    if not key:
+        print("(GROQ_API_KEY not found in .env or the environment; skipping Groq)")
+        return []
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/models",
+        headers={"Authorization": f"Bearer {key}", "User-Agent": "cadence-setup/0.1"},  # urllib's default UA gets 403
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            ids = [m["id"] for m in json.load(r).get("data", [])]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:160].replace(key, "[KEY]")
+        print(f"(Groq model list failed: HTTP {e.code} {body!r}; trying known models instead)")
+        return GROQ_FALLBACK
+    except Exception as e:  # noqa: BLE001
+        print(f"(Groq model list failed: {type(e).__name__}; trying known models instead)")
+        return GROQ_FALLBACK
+    return ["groq/" + i for i in sorted(ids) if not any(w in i.lower() for w in SKIP)]
+
+
 JUDGE_PROMPT = ('Rate "2+2=4" for correctness. Reply with ONLY JSON: '
                 '{"score": <0-10>, "confidence": <0-1>, "rationale": "<short>"}')
 
@@ -50,4 +83,5 @@ def main(models: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or CANDIDATES)
+    load_dotenv(ROOT / ".env")
+    main(sys.argv[1:] or CANDIDATES + groq_chat_models())

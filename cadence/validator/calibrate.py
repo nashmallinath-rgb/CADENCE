@@ -16,6 +16,7 @@ class CalibItem(BaseModel):
     response_text: str
     correct: bool  # ground truth from exact match or a human label
     rubric: str
+    source: str = ""  # where the item came from: genuine / degraded / corrupted (for per-source judge accuracy)
 
 
 class JudgeHealth(BaseModel):
@@ -26,6 +27,9 @@ class JudgeHealth(BaseModel):
     kappa_min: float
     flagged: bool
     rechecked: bool = False
+    parse_failures: int = 0  # judge replies that could not be parsed (count as no vote)
+    misses: list[dict] = Field(default_factory=list)  # up to 5 items where the verdict disagreed with ground truth (response = its last 120 chars, where final answers usually are)
+    scores: list[float] = Field(default_factory=list)  # per-item mean judge score (0-10), same order as items
     usage: Usage = Field(default_factory=Usage)
 
 
@@ -40,9 +44,17 @@ def calibrate(judge: Judge, items: Sequence[CalibItem], kappa_min: float = 0.60,
     scores: list[float] = []
     matrix: list[list[float]] = []
     usage = Usage()
+    parse_failures = 0
+    misses: list[dict] = []
     for it in items:
         r = judge.score(it.example, it.response_text, it.rubric)
         usage = usage + r.usage
+        parse_failures += r.parse_failures
+        if (r.score_0_10 >= threshold) != it.correct and len(misses) < 5:
+            misses.append({"id": it.example.id, "truth_correct": it.correct, "judge_score": round(r.score_0_10, 1),
+                           "confidence": round(r.confidence_0_1, 2),
+                           "rationale": (r.trials[0].rationale if r.trials else "(no parseable reply)")[:160],
+                           "response": it.response_text[-120:]})
         scores.append(r.score_0_10)
         row = [t.score for t in r.trials]
         row += [r.score_0_10] * (judge.trials - len(row))  # pad failed trials with the mean
@@ -53,7 +65,8 @@ def calibrate(judge: Judge, items: Sequence[CalibItem], kappa_min: float = 0.60,
         v = icc_2_1(matrix)
         icc = None if math.isnan(v) else v
     return JudgeHealth(kappa=kappa, icc=icc, n=len(items), trials=judge.trials, kappa_min=kappa_min,
-                       flagged=kappa < kappa_min, usage=usage)
+                       flagged=kappa < kappa_min, usage=usage, scores=scores,
+                       parse_failures=parse_failures, misses=misses)
 
 
 def calibrate_with_recheck(judge: Judge, items: Sequence[CalibItem], kappa_min: float = 0.60,

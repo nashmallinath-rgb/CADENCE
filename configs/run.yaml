@@ -5,11 +5,13 @@ children_per_gen: 4
 minibatch: 16
 max_archive: 20
 final_sample: 64
+workers: 4                   # parallel example evaluations; rpm below still caps real throughput
+parents_per_gen: 2
 
 llm:
   cache_dir: .cache/llm        # gitignored; makes reruns free
   max_retries: 4
   est_output_tokens: 512       # used by the budget pre-check when a call sets no max_tokens
-  rpm:                         # requests per minute per provider (placeholders, tune to your tier)
-    gemini: 10
-    xai: 30
+  rpm:                         # requests per minute per provider (tune to your tier)
+    gemini: 10                 # free-tier limits are not published; this is a conservative guess
+    groq: 15                   # free tier allows ~8K tokens/min per model; ~500 tokens per judge call => ~15 calls/min

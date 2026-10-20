@@ -11,4 +11,4 @@ def test_run_config_loads_with_llm_section() -> None:
     cfg = load_run_config()
     assert cfg.max_gen >= 1 and cfg.max_archive >= 1
     assert cfg.llm.cache_dir == ".cache/llm"
-    assert set(cfg.llm.rpm) >= {"gemini", "xai"}
+    assert set(cfg.llm.rpm) >= {"gemini", "groq"}

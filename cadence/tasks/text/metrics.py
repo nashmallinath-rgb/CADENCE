@@ -68,3 +68,22 @@ def sentiment_label(text: str) -> str | None:
     t = text.lower()
     hits = [(t.find(w), w) for w in ("positive", "negative") if w in t]
     return min(hits)[1] if hits else None
+
+
+def corrupt_last_number(text: str) -> str | None:
+    """Replace the last number in `text` with a different one (for building known-wrong calibration items)."""
+    matches = list(re.finditer(_NUM, text))
+    if not matches:
+        return None
+    m = matches[-1]
+    try:
+        val = float(_clean_num(m.group(0)))
+    except ValueError:
+        return None
+    new = val + 7
+    new_s = str(int(new)) if new == int(new) else str(new)
+    return text[: m.start()] + new_s + text[m.end():]
+
+
+def flip_sentiment(text: str) -> str:
+    return "negative" if sentiment_label(text) == "positive" else "positive"

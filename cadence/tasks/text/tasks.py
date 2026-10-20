@@ -42,7 +42,8 @@ class TextTask(Task):
             self._examples = [self.to_example(i, r) for i, r in enumerate(self._records)]
             ids = [e.id for e in self._examples]
             if len(set(ids)) != len(ids):
-                raise ValueError(f"duplicate example ids in {self.name}")
+                dups = sorted({i for i in ids if ids.count(i) > 1})[:5]
+                raise ValueError(f"duplicate example ids in {self.name}, e.g. {dups}")
         return self._examples
 
     def load(self, split: Split, n: int | None = None, seed: int = 0) -> list[Example]:
@@ -60,6 +61,17 @@ class Gsm8kTask(TextTask):
 
     def automatic_score(self, ex: Example, out: Output) -> float | None:
         return float(metrics.numeric_equal(metrics.extract_number(out.text or ""), str(ex.reference)))
+
+    def calibration_rubric(self, ex: Example) -> str | None:
+        return ("The task is a grade-school math word problem. Work it out yourself. The response states its final "
+                "answer on the line starting with '####'; that number is what counts. Score 10 if the number after '####' "
+                "is correct and 0 if it is wrong, even if the working above it looks right or disagrees with it.")
+
+    def degraded_prompt(self) -> str | None:
+        return "Reply with only the final number as '#### <number>'. Do not show any work. Guess quickly."
+
+    def corrupt_output(self, ex: Example, text: str) -> str | None:
+        return metrics.corrupt_last_number(text)
 
 
 class HotpotQATask(TextTask):
@@ -92,7 +104,8 @@ class Sst2Task(TextTask):
     def to_example(self, i: int, rec: dict[str, Any]) -> Example:
         if rec["label"] not in (0, 1):
             raise ValueError("SST-2 rows must have label 0 or 1 (drop the unlabeled test split)")
-        return Example(id=f"sst2-{rec.get('idx', i)}", input={"sentence": rec["sentence"]},
+        # not rec["idx"]: train and validation both number rows from 0, so pooled idx values collide
+        return Example(id=f"sst2-{i}", input={"sentence": rec["sentence"]},
                        reference="positive" if rec["label"] == 1 else "negative")
 
     def seed_prompt(self) -> str:
@@ -100,6 +113,13 @@ class Sst2Task(TextTask):
 
     def automatic_score(self, ex: Example, out: Output) -> float | None:
         return float(metrics.sentiment_label(out.text or "") == ex.reference)
+
+    def calibration_rubric(self, ex: Example) -> str | None:
+        return ("The task is to classify the sentiment of the given sentence as positive or negative. "
+                "Score 10 if the response gives the correct label and 0 if it gives the wrong label.")
+
+    def corrupt_output(self, ex: Example, text: str) -> str | None:
+        return metrics.flip_sentiment(text)
 
 
 class IfbenchTask(TextTask):

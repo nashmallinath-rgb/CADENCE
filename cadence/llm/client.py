@@ -65,6 +65,10 @@ def litellm_backend(model: str, messages: list[dict[str, Any]], params: dict[str
     import litellm
 
     litellm.drop_params = True  # reasoning models reject e.g. temperature
+    litellm.suppress_debug_info = True  # silence the 'Give Feedback / Get Help' banner printed on every retry
+    # Fail slow calls fast (the tenacity retry layer handles Timeout) and keep all retrying in one place so the
+    # budget guard and retry stats see every call; LiteLLM's own retries are disabled.
+    params = {"timeout": 90, "num_retries": 0, **params}
     resp = litellm.completion(model=model, messages=messages, **params)
     text = resp.choices[0].message.content or ""
     usage = getattr(resp, "usage", None)
@@ -124,7 +128,8 @@ class LLMClient:
 
     # -- construction from the repo configs ------------------------------------------
     @classmethod
-    def from_config(cls, *, seed: int | None = None, cache_dir: Path | None = None) -> LLMClient:
+    def from_config(cls, *, seed: int | None = None, cache_dir: Path | None = None,
+                    budget: BudgetGuard | None = None) -> LLMClient:
         from dotenv import load_dotenv
 
         from cadence.config import ROOT, load_budget_config, load_models_config, load_run_config
@@ -136,7 +141,7 @@ class LLMClient:
         directory.mkdir(parents=True, exist_ok=True)
         return cls(
             load_models_config().roles.model_dump(),
-            budget=BudgetGuard.from_config(load_budget_config()),
+            budget=budget or BudgetGuard.from_config(load_budget_config()),
             pricing=load_pricing(),
             cache=DiskCache(directory),
             rpm=run.llm.rpm,
