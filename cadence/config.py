@@ -66,6 +66,8 @@ class RunConfig(BaseModel):
     minibatch: int = Field(default=16, ge=1)
     max_archive: int = Field(default=20, ge=1)
     final_sample: int = Field(default=64, ge=1)
+    workers: int = Field(default=4, ge=1)  # parallel example evaluations (provider rpm still throttles)
+    parents_per_gen: int = Field(default=2, ge=1)
     llm: LLMSettings = Field(default_factory=LLMSettings)
 
 

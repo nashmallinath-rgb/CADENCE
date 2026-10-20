@@ -5,6 +5,8 @@ children_per_gen: 4
 minibatch: 16
 max_archive: 20
 final_sample: 64
+workers: 4                   # parallel example evaluations; rpm below still caps real throughput
+parents_per_gen: 2
 
 llm:
   cache_dir: .cache/llm        # gitignored; makes reruns free
