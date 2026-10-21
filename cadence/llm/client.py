@@ -20,6 +20,7 @@ from tenacity.wait import wait_base
 from cadence.cost.pricing import Pricing
 from cadence.cost.tracker import count_tokens
 from cadence.llm.budget import BudgetGuard
+from cadence.llm import media as _media
 from cadence.llm.cache import CacheBackend, DiskCache, MemoryCache, make_cache_key
 from cadence.llm.mock import MockClient
 from cadence.schemas import GenRequest, Usage
@@ -58,6 +59,25 @@ class BackendResponse:
 
 
 Backend = Callable[[str, list[dict[str, Any]], dict[str, Any]], BackendResponse]
+MediaBackend = Callable[[str, str, dict[str, Any]], _media.MediaResponse]  # (model, prompt/text, params)
+TranscribeBackend = Callable[[str, bytes, dict[str, Any]], _media.MediaResponse]  # (model, audio, params)
+IMAGE_TOKEN_ESTIMATE = 1500  # budget pre-check cost of one attached image (base64 text must not be counted as tokens)
+
+
+def prompt_tokens(messages: list[dict[str, Any]]) -> int:
+    """Token estimate for a message list. Multimodal parts: text is counted, each image is a flat estimate."""
+    total = 0
+    for m in messages:
+        content = m.get("content", "")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    total += count_tokens(str(part.get("text", "")))
+                else:
+                    total += IMAGE_TOKEN_ESTIMATE
+        else:
+            total += count_tokens(str(content))
+    return total
 
 
 def litellm_backend(model: str, messages: list[dict[str, Any]], params: dict[str, Any]) -> BackendResponse:
@@ -102,6 +122,9 @@ class LLMClient:
         pricing: Pricing,
         cache: CacheBackend | None = None,
         backend: Backend | None = None,
+        image_backend: MediaBackend | None = None,
+        speech_backend: MediaBackend | None = None,
+        transcribe_backend: TranscribeBackend | None = None,
         rpm: Mapping[str, float] | None = None,
         max_retries: int = 4,
         est_output_tokens: int = 512,
@@ -115,6 +138,9 @@ class LLMClient:
         self.pricing = pricing
         self.cache: CacheBackend = cache if cache is not None else MemoryCache()
         self.backend: Backend = backend or litellm_backend
+        self.image_backend: MediaBackend = image_backend or _media.litellm_image
+        self.speech_backend: MediaBackend = speech_backend or _media.litellm_speech
+        self.transcribe_backend: TranscribeBackend = transcribe_backend or _media.litellm_transcribe
         self.rpm = dict(rpm or {})
         self.max_retries = max_retries
         self.est_output_tokens = est_output_tokens
@@ -171,7 +197,7 @@ class LLMClient:
         if wait > 0:
             self._sleeper(wait)
 
-    def _call_with_retry(self, model: str, req: GenRequest) -> BackendResponse:
+    def _retry(self, model: str, fn: Callable[[], Any]) -> Any:
         def _note_retry(_state: Any) -> None:
             self.stats.retries += 1
 
@@ -186,8 +212,11 @@ class LLMClient:
         for attempt in retrying:
             with attempt:
                 self._throttle(model)
-                return self.backend(model, req.messages, dict(req.params))
+                return fn()
         raise RuntimeError("unreachable")  # pragma: no cover
+
+    def _call_with_retry(self, model: str, req: GenRequest) -> BackendResponse:
+        return self._retry(model, lambda: self.backend(model, req.messages, dict(req.params)))
 
     # -- public API ------------------------------------------------------------------
     def complete(self, req: GenRequest) -> tuple[str, Usage]:
@@ -198,7 +227,7 @@ class LLMClient:
             self.stats.cache_hits += 1
             return hit["text"], Usage.model_validate(hit["usage"])
 
-        est_in = count_tokens("\n".join(str(m.get("content", "")) for m in req.messages))
+        est_in = prompt_tokens(req.messages)
         est_out = int(req.params.get("max_tokens") or self.est_output_tokens)
         self.budget.check(
             est_tokens=est_in + est_out,
@@ -214,6 +243,60 @@ class LLMClient:
         self.stats.live_calls += 1
         self.budget.record(usage)
         self.cache.set(key, {"text": resp.text, "usage": usage.model_dump()})
+        return resp.text, usage
+
+
+    # -- media ------------------------------------------------------------------------------------------------------
+    @staticmethod
+    def _last_text(req: GenRequest) -> str:
+        content = req.messages[-1].get("content", "") if req.messages else ""
+        if isinstance(content, list):
+            return "\n".join(str(p.get("text", "")) for p in content if isinstance(p, dict) and p.get("type") == "text")
+        return str(content)
+
+    def _media_call(self, kind: str, req: GenRequest, extra: dict[str, Any], est_units: dict[str, float],
+                    live: Callable[[str], _media.MediaResponse]) -> tuple[_media.MediaResponse, Usage]:
+        """Shared path for image/speech/transcribe: cache (bytes kept), budget pre-check, throttle+retry, record."""
+        model = self.model_for(req.role)
+        key = make_cache_key(model, req.messages, {**req.params, "__kind": kind, **extra}, self.seed)
+        hit = self.cache.get(key)
+        if hit is not None:
+            self.stats.cache_hits += 1
+            return _media.MediaResponse(data=hit["data"], text=hit.get("text", "")), Usage.model_validate(hit["usage"])
+        est_in = prompt_tokens(req.messages)
+        est_usd = self.pricing.price(Usage(input_tokens=est_in, units=est_units), model)
+        self.budget.check(est_tokens=est_in, est_usd=est_usd)
+        resp: _media.MediaResponse = self._retry(model, lambda: live(model))
+        usage = Usage(input_tokens=resp.input_tokens, output_tokens=resp.output_tokens, units=dict(resp.units))
+        usage.usd = self.pricing.price(usage, model)
+        self.stats.live_calls += 1
+        self.budget.record(usage)
+        self.cache.set(key, {"data": resp.data, "text": resp.text, "usage": usage.model_dump()})
+        return resp, usage
+
+    def image(self, req: GenRequest) -> tuple[bytes, Usage]:
+        """Generate one image from the last user message. Returns (PNG/JPEG bytes, Usage with units['images']=1)."""
+        prompt = self._last_text(req)
+        resp, usage = self._media_call("image", req, {}, {"images": 1.0},
+                                       lambda m: self.image_backend(m, prompt, dict(req.params)))
+        return resp.data, usage
+
+    def speech(self, req: GenRequest) -> tuple[bytes, Usage]:
+        """Text-to-speech of the last user message. Returns (WAV bytes, Usage with units['audio_seconds'])."""
+        text = self._last_text(req)
+        est_seconds = max(1.0, len(text) / 12.0)
+        resp, usage = self._media_call("speech", req, {}, {"audio_seconds": est_seconds},
+                                       lambda m: self.speech_backend(m, text, dict(req.params)))
+        return resp.data, usage
+
+    def transcribe(self, audio: bytes, req: GenRequest) -> tuple[str, Usage]:
+        """Speech-to-text. `req.role` selects the model; the audio hash is part of the cache key."""
+        import hashlib
+
+        est_seconds = max(1.0, _media.wav_duration(audio))
+        resp, usage = self._media_call("transcribe", req, {"audio": hashlib.sha256(audio).hexdigest()},
+                                       {"audio_seconds": est_seconds},
+                                       lambda m: self.transcribe_backend(m, audio, dict(req.params)))
         return resp.text, usage
 
 

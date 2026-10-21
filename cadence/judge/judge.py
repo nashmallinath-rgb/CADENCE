@@ -85,24 +85,34 @@ class Judge:
     def with_trials(self, trials: int) -> "Judge":
         return Judge(self.client, self.role, trials, self.temperature)
 
-    def build_request(self, ex: Example, response_text: str, rubric: str, i: int) -> GenRequest:
+    def build_request(self, ex: Example, response_text: str, rubric: str, i: int,
+                      media: tuple[bytes, str] | None = None) -> GenRequest:
+        """`media` = (bytes, mime) attaches an image to the user turn (vision judging)."""
         user = (
             f"[evaluation pass {i + 1}/{self.trials}]\n"
             f"TASK INPUT:\n{render_input(ex)}\n\nRUBRIC:\n{rubric}\n\nRESPONSE:\n{response_text}"
         )
+        content: Any = user
+        if media is not None:
+            from cadence.llm.media import data_url
+
+            data, mime = media
+            content = [{"type": "text", "text": user},
+                       {"type": "image_url", "image_url": {"url": data_url(data, mime)}}]
         return GenRequest(
             role=self.role,
-            messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
+            messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}],
             params={"temperature": self.temperature},
         )
 
-    def score(self, ex: Example, response_text: str, rubric: str) -> JudgeResult:
+    def score(self, ex: Example, response_text: str, rubric: str,
+              media: tuple[bytes, str] | None = None) -> JudgeResult:
         """Reference-free: `ex.reference` is never put in the prompt."""
         trials: list[JudgeTrial] = []
         failures = 0
         usage = Usage()
         for i in range(self.trials):
-            text, u = self.client.complete(self.build_request(ex, response_text, rubric, i))
+            text, u = self.client.complete(self.build_request(ex, response_text, rubric, i, media))
             usage = usage + u
             t = parse_trial(text)
             if t is None:

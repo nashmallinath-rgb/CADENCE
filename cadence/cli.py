@@ -45,7 +45,12 @@ def _run_optimize(args: argparse.Namespace) -> int:
     from cadence.tasks import get_task
     from cadence.tracking import MlflowTracker, NullTracker
 
-    task = get_task(args.task)
+    from cadence.config import ROOT as _ROOT
+
+    run_id = args.run_id or f"{args.task}-{time.strftime('%Y%m%d-%H%M%S')}"
+    run_dir = _ROOT / "runs" / run_id
+    media = args.task in ("image", "audio")
+    task = get_task(args.task, media_dir=run_dir / "media") if media else get_task(args.task)
     if task.stream != args.stream:
         print(f"FAIL: task {args.task!r} belongs to stream {task.stream!r}, not {args.stream!r}")
         return 1
@@ -63,16 +68,16 @@ def _run_optimize(args: argparse.Namespace) -> int:
         max_archive=rc.max_archive, final_sample=rc.final_sample, workers=args.workers or rc.workers,
         parents_per_gen=rc.parents_per_gen)
     if args.mock:
-        client: object = MockClient(script={"reflector": toy_reflector} if args.task == "toy" else None, budget=budget)
+        client: object = MockClient(script={"reflector": toy_reflector} if args.task == "toy" else None, budget=budget,
+                                    unit_prices={"images": 0.04, "audio_seconds": 0.0004})
     else:
         client = LLMClient.from_config(budget=budget, seed=settings.seed)
-    run_id = args.run_id or f"{args.task}-{time.strftime('%Y%m%d-%H%M%S')}"
-    run_dir = ROOT / "runs" / run_id
     tracker = NullTracker() if args.no_mlflow else MlflowTracker(f"sqlite:///{(ROOT / 'mlflow.db').as_posix()}")
     print(f"Optimising task={args.task} ({'MOCK' if args.mock else 'LIVE'}) run={run_id} "
           f"gens={settings.max_gen} children={settings.children_per_gen} minibatch={settings.minibatch}", flush=True)
     try:
-        res = optimize(task, client, Cascade.from_config(client, cc), settings, run_dir, tracker=tracker,
+        cheap, strong = ("vision_judge", "vision_judge_strong") if task.stream == "image" else ("cheap_judge", "strong_judge")
+        res = optimize(task, client, Cascade.from_config(client, cc, cheap, strong), settings, run_dir, tracker=tracker,
                        resume=args.resume, log=lambda m: print(m, flush=True))
     except (RuntimeError, FileExistsError, ValueError, BudgetExceeded) as exc:
         print(f"FAIL: {exc}")

@@ -36,6 +36,7 @@ class Trace(BaseModel):
     quality: float
     judged: bool = False
     rationale: str = ""
+    components: dict[str, float] = Field(default_factory=dict)
 
 
 class EvalResult(BaseModel):
@@ -98,7 +99,7 @@ class Evaluator:
         )
         traces = [
             Trace(example_id=ex.id, input=_clip(self.task.format_input(ex)), output=_clip(out.text or ""),
-                  quality=sc.quality, judged=sc.judged)
+                  quality=sc.quality, judged=sc.judged, components=dict(sc.components))
             for ex, out, sc in done
         ]
         judge_usd = sum((sc.usage.usd for _, _, sc in done), 0.0)

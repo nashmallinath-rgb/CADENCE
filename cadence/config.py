@@ -20,6 +20,11 @@ class ModelRoles(BaseModel):
     image_gen: str
     tts: str
     asr_or_audio_judge: str
+    # added in Phase 7/8 (defaults keep older models.yaml files loading)
+    vision_judge: str = "gemini/gemini-3.1-flash-lite"
+    vision_judge_strong: str = "gemini/gemini-3.5-flash-lite"
+    asr: str = "groq/whisper-large-v3-turbo"
+    same_family_judge: str = "gemini/gemma-4-26b-a4b-it"
 
 
 class ModelsConfig(BaseModel):

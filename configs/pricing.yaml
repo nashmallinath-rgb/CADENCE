@@ -77,9 +77,19 @@ models:
     units:
       images: 0.03
     verify: true
+  # --- Media (Phase 7). Per-unit prices are PLACEHOLDERS; set them from the provider pricing page, then verify: false.
+  gemini/gemini-2.5-flash-image:
+    input_per_mtok: 0.30
+    output_per_mtok: 2.50
+    units: {images: 0.039}
+    verify: true
   gemini/gemini-2.5-flash-preview-tts:
     input_per_mtok: 0.50
-    output_per_mtok: 10.00
-    units:
-      audio_seconds: 0.0
+    output_per_mtok: 10.0
+    units: {audio_seconds: 0.0004}
+    verify: true
+  groq/whisper-large-v3-turbo:
+    input_per_mtok: 0.0
+    output_per_mtok: 0.0
+    units: {audio_seconds: 0.0}
     verify: true

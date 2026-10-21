@@ -14,3 +14,8 @@ roles:
   image_gen: gemini/imagen-3.0-generate-002      # placeholder until Phase 7
   tts: gemini/gemini-2.5-flash-preview-tts       # placeholder until Phase 7
   asr_or_audio_judge: gemini/gemini-2.0-flash    # placeholder until Phase 7
+  # --- Phase 7/8 roles. UNVERIFIED until you run `python scripts/probe_media.py` (model names change often). ---
+  vision_judge: gemini/gemini-3.1-flash-lite        # first-pass image judge (must accept images)
+  vision_judge_strong: gemini/gemini-3.5-flash-lite # escalation image judge
+  asr: groq/whisper-large-v3-turbo                  # speech-to-text for the audio WER round trip
+  same_family_judge: gemini/gemma-4-26b-a4b-it      # same vendor as the generator, for the self-preference gap
