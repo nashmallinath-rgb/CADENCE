@@ -158,7 +158,8 @@ def test_missing_data_file_gives_a_helpful_error(tmp_path) -> None:  # type: ign
 
 
 def test_registry() -> None:
-    assert set(TASKS) == {"toy", "gsm8k", "hotpotqa", "sst2", "ifbench"}
+    # superset: other streams (image, audio, code_web) register themselves too
+    assert set(TASKS) >= {"toy", "gsm8k", "hotpotqa", "sst2", "ifbench"}
     assert get_task("toy").name == "toy"
     with pytest.raises(KeyError, match="available"):
         get_task("nope")

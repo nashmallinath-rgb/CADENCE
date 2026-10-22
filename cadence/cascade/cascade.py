@@ -21,6 +21,18 @@ class Scorable(Protocol):
     def rubric(self, ex: Example) -> str | None: ...
 
 
+def media_of(out: Output) -> tuple[bytes, str] | None:
+    """(bytes, mime) of an image output so a vision judge can see it; None for text/audio outputs."""
+    if out.kind != "image" or not out.path:
+        return None
+    from pathlib import Path
+
+    from cadence.llm.media import image_mime
+
+    data = Path(out.path).read_bytes()
+    return data, image_mime(data)
+
+
 class CascadeStats(BaseModel):
     n_scored: int = 0
     n_auto: int = 0
@@ -57,14 +69,20 @@ class Cascade:
         if auto is not None:  # exact-match style tasks never touch a judge
             with self._lock:
                 self.stats.n_auto += 1
-            return Score(quality=min(1.0, max(0.0, float(auto))), components={"auto": float(auto)})
+            comps_auto = {"auto": float(auto)}
+            extra = getattr(task, "auto_components", None)  # optional hook: e.g. WER and speaking rate for audio
+            if callable(extra):
+                comps_auto.update({k: float(v) for k, v in extra(ex, out).items()})
+            return Score(quality=min(1.0, max(0.0, float(auto))), components=comps_auto)
         rubric = task.rubric(ex)
         if rubric is None:
             raise ValueError("task returned neither an automatic score nor a rubric for example " + ex.id)
-        text = out.text or ""
+        media = media_of(out)
+        text = out.text or ("(the response is the attached image)" if media else "")
+        kw = {"media": media} if media is not None else {}  # text judges keep the 3-argument call
         with self._lock:
             self.stats.n_judged += 1
-        cheap = self.cheap.score(ex, text, rubric)
+        cheap = self.cheap.score(ex, text, rubric, **kw)
         usage = cheap.usage
         comps = {"cheap": cheap.score_0_10 / 10, "cheap_confidence": cheap.confidence_0_1, "cheap_spread": cheap.spread}
         escalated = self.needs_escalation(cheap)
@@ -72,7 +90,7 @@ class Cascade:
         if escalated:
             with self._lock:
                 self.stats.n_escalated += 1
-            strong = self.strong.score(ex, text, rubric)
+            strong = self.strong.score(ex, text, rubric, **kw)
             usage = usage + strong.usage
             final = strong.score_0_10  # strong verdict replaces the cheap one
             comps["strong"] = strong.score_0_10 / 10

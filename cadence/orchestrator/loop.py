@@ -130,6 +130,8 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
             raise ValueError("cannot resume: run directory was created with a different task/settings")
         _atomic_write(cfg_p, json.dumps(cfg, indent=2, sort_keys=True))
         st = json.loads(state_p.read_text(encoding="utf-8"))
+        if not arch_p.exists():
+            raise ValueError(f"cannot resume: {arch_p.name} is missing from {run_dir} (state.json exists, so the run is incomplete)")
         archive = ParetoArchive.from_json(arch_p.read_text(encoding="utf-8"), settings.max_archive)
         seen, hv_history, gen_done = set(st["seen"]), list(st["hv_history"]), int(st["gen_done"])
         ref = Objectives.model_validate(st["ref"])
@@ -154,7 +156,9 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
         traces[res.evaluated.candidate.id] = res.traces
         emit({"event": "evaluated", "gen": gen, "id": res.evaluated.candidate.id,
               "parents": res.evaluated.candidate.parent_ids, "template": res.evaluated.candidate.template,
-              "objectives": res.evaluated.objectives.model_dump(), "n_errors": res.n_errors, "in_archive": added})
+              "objectives": res.evaluated.objectives.model_dump(), "n_errors": res.n_errors, "in_archive": added,
+              "n_examples": res.evaluated.n_examples, "n_judged": res.n_judged, "n_escalated": res.n_escalated,
+              "judge_usd": res.judge_usd, "generation_usd": res.generation_usd})
         return added
 
     tracker.start(run_dir.name, {**cfg["settings"], "task": task.name, "resumed": resumed})
