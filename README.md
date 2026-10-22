@@ -69,7 +69,7 @@ docs/              notes
 - [x] Phase 3 — Pareto archive / non-dominated sorting
 - [x] Phase 4 — judges, cascade, validator
 - [x] Phase 5 — DSPy orchestrator loop
-- [ ] Phase 6 — modality tasks (text, code/web, image, audio)
-- [ ] Phase 7 — MLflow tracking
-- [ ] Phase 8 — held-out benchmark + dual-judge
+- [x] Phase 6 — modality tasks (text, code/web, image, audio)
+- [x] Phase 7 — MLflow tracking
+- [x] Phase 8 — held-out benchmark + dual-judge
 - [ ] Phase 9 — first closed-loop run on a tiny budget
