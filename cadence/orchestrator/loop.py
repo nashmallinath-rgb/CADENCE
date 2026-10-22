@@ -130,6 +130,8 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
             raise ValueError("cannot resume: run directory was created with a different task/settings")
         _atomic_write(cfg_p, json.dumps(cfg, indent=2, sort_keys=True))
         st = json.loads(state_p.read_text(encoding="utf-8"))
+        if not arch_p.exists():
+            raise ValueError(f"cannot resume: {arch_p.name} is missing from {run_dir} (state.json exists, so the run is incomplete)")
         archive = ParetoArchive.from_json(arch_p.read_text(encoding="utf-8"), settings.max_archive)
         seen, hv_history, gen_done = set(st["seen"]), list(st["hv_history"]), int(st["gen_done"])
         ref = Objectives.model_validate(st["ref"])

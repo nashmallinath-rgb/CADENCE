@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from cadence.tasks.audio import AudioTask
 from cadence.tasks.base import Task
+from cadence.tasks.code_web import CodeWebTask
 from cadence.tasks.image import ImageTask
 from cadence.tasks.text import Gsm8kTask, HotpotQATask, IfbenchTask, Sst2Task
 from cadence.tasks.toy import ToyTask
@@ -16,6 +17,7 @@ TASKS: dict[str, Callable[..., Task]] = {
     "ifbench": IfbenchTask,
     "image": ImageTask,
     "audio": AudioTask,
+    "code_web": CodeWebTask,
 }
 
 

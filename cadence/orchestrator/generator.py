@@ -42,7 +42,11 @@ _FENCE = re.compile(r"^```[a-zA-Z]*\n(.*?)\n```$", re.S)
 def extract_template(text: str) -> str:
     """Pull the template out of a reflector reply: <template> tags, else a code fence, else the whole text."""
     m = _TAG.search(text)
-    body = m.group(1) if m else text
+    if m:
+        body = m.group(1)
+    else:  # an unclosed tag (truncated reply): keep what follows it, never the tag text itself
+        i = text.lower().find("<template>")
+        body = text[i + len("<template>"):] if i != -1 else text
     body = body.strip()
     f = _FENCE.match(body)
     return (f.group(1) if f else body).strip()

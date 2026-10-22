@@ -269,13 +269,17 @@ def test_report_plots_are_optional_and_never_fatal(tmp_path: Path, monkeypatch: 
     d = _run_dir(tmp_path)
     broken = types.ModuleType("cadence.benchmark.plots")
     broken.load_members = lambda p: (_ for _ in ()).throw(RuntimeError("bad"))  # type: ignore[attr-defined]
+    import cadence.benchmark as pkg
+
     monkeypatch.setitem(sys.modules, "cadence.benchmark.plots", broken)
+    monkeypatch.setattr(pkg, "plots", broken, raising=False)  # `from pkg import plots` prefers the package attribute
     assert make_plots(d) == {}  # a failing plot module must not lose the report
     fake = types.ModuleType("cadence.benchmark.plots")
     fake.load_members = lambda p: ["m"]  # type: ignore[attr-defined]
     fake.plot_pareto_3d = lambda m, out: out  # type: ignore[attr-defined]
     fake.plot_pareto_2d = lambda m, prefix: [Path(f"{prefix}_{s}.png") for s in ("a", "b", "c")]  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "cadence.benchmark.plots", fake)
+    monkeypatch.setattr(pkg, "plots", fake, raising=False)
     got = make_plots(d)
     assert got["3D Pareto"] == "pareto_3d.png" and len(got) == 4
     assert "pareto_3d.png" in build_report(d, got)
