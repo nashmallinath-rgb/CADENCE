@@ -1,4 +1,4 @@
-"""CADENCE command-line entry. Scaffolding commands only."""
+"""CADENCE command-line entry."""
 
 from __future__ import annotations
 
@@ -31,7 +31,135 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     rn.add_argument("--resume", action="store_true", help="continue the run in --run-id")
     rn.add_argument("--mock", action="store_true", help="offline MockClient (toy task gets a scripted reflector)")
     rn.add_argument("--no-mlflow", action="store_true", help="skip MLflow tracking")
+    rn.add_argument("--calibrate", action="store_true",
+                    help="check judge health vs ground truth first (tasks with an exact-match metric only)")
+    rn.add_argument("--no-report", action="store_true", help="do not write report.md and plots at the end")
+    ca = sub.add_parser("calibrate", help="Judge health (kappa vs exact-match ground truth) for one task")
+    ca.add_argument("--task", required=True)
+    ca.add_argument("--n", type=int, default=12, help="calibration examples")
+    ca.add_argument("--trials", type=int, default=2)
+    ca.add_argument("--max-calls", type=int, default=400)
+    ca.add_argument("--run-id", default=None, help="write runs/<run-id>/calibration.json (default calibration-<task>)")
+    ca.add_argument("--mock", action="store_true")
+    bm = sub.add_parser("benchmark", help="Held-out evaluation + dual-judge check of a finished run")
+    bm.add_argument("--run", required=True, help="run id under runs/")
+    bm.add_argument("--n", type=int, default=24, help="held-out examples per archive member")
+    bm.add_argument("--trials", type=int, default=3, help="judge trials for the second-family re-score")
+    bm.add_argument("--budget-usd", type=float, default=None)
+    bm.add_argument("--max-calls", type=int, default=None)
+    bm.add_argument("--workers", type=int, default=None)
+    bm.add_argument("--no-dual", action="store_true", help="skip the second-family judge")
+    bm.add_argument("--no-plots", action="store_true")
+    bm.add_argument("--mock", action="store_true")
+    rp = sub.add_parser("report", help="(Re)write report.md for a run from the files in its directory")
+    rp.add_argument("--run", required=True)
+    rp.add_argument("--no-plots", action="store_true")
     return parser.parse_args(argv)
+
+
+def _client_for(mock: bool, task_name: str, budget_usd: float | None, max_calls: int | None, seed: int) -> tuple[object, object]:
+    """(client, budget) shared by the calibrate and benchmark commands."""
+    from cadence.config import load_budget_config
+    from cadence.llm import BudgetGuard, LLMClient, MockClient
+    from cadence.orchestrator.mock_reflector import toy_reflector
+
+    b = load_budget_config()
+    budget = BudgetGuard(budget_usd or b.max_usd_per_run, max_calls or b.max_calls_per_run, b.max_tokens_per_run)
+    if mock:
+        return MockClient(script={"reflector": toy_reflector} if task_name == "toy" else None, budget=budget,
+                          unit_prices={"images": 0.04, "audio_seconds": 0.0004}), budget
+    return LLMClient.from_config(budget=budget, seed=seed), budget
+
+
+def _judge_roles(task: object) -> tuple[str, str]:
+    return ("vision_judge", "vision_judge_strong") if getattr(task, "stream", "") == "image" else ("cheap_judge", "strong_judge")
+
+
+def _run_calibrate(args: argparse.Namespace) -> int:
+    import json
+
+    from cadence.calibration import run_calibration
+    from cadence.config import ROOT, load_cascade_config
+    from cadence.tasks import get_task
+
+    task = get_task(args.task)
+    cfg = load_cascade_config()
+    client, _ = _client_for(args.mock, args.task, None, args.max_calls, 0)
+    rep = run_calibration(client, task, n=args.n, trials=args.trials, cfg=cfg, log=lambda m: print(m, flush=True))
+    out_dir = ROOT / "runs" / (args.run_id or f"calibration-{args.task}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "calibration.json").write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+    if not rep["supported"]:
+        print(f"Calibration not possible for {args.task!r}: {rep['reason']}")
+    else:
+        for role, j in rep["judges"].items():
+            print(f"  {role}: kappa={j.get('kappa')} {'FLAGGED' if j.get('flagged') else 'ok'}")
+        if rep["flagged"]:
+            print(f"WARNING: judges below kappa {cfg.kappa_min}: {', '.join(rep['flagged'])}. Treat judged scores with caution.")
+    print(f"saved {(out_dir / 'calibration.json').relative_to(ROOT)}")
+    return 1 if rep.get("errors") else 0
+
+
+def _run_benchmark(args: argparse.Namespace) -> int:
+    import json
+
+    from cadence.benchmark import evaluate_heldout, run_dual_judge, write_dual_judge, write_heldout, write_report
+    from cadence.cascade import Cascade
+    from cadence.config import ROOT, load_cascade_config, load_run_config
+    from cadence.schemas import Evaluated
+    from cadence.tasks import get_task
+
+    run_dir = ROOT / "runs" / args.run
+    cfg_p, arch_p = run_dir / "config.json", run_dir / "archive.json"
+    if not cfg_p.exists() or not arch_p.exists():
+        print(f"FAIL: {run_dir} is not a finished run (needs config.json and archive.json). Run `run` first.")
+        return 1
+    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+    members = [Evaluated.model_validate(d) for d in json.loads(arch_p.read_text(encoding="utf-8"))]
+    if not members:
+        print("FAIL: the run's archive is empty")
+        return 1
+    seed = int(cfg["settings"].get("seed", 0))
+    name = cfg["task"]
+    media = name in ("image", "audio")
+    task = get_task(name, media_dir=run_dir / "media") if media else get_task(name)
+    cc, rc = load_cascade_config(), load_run_config()
+    client, _ = _client_for(args.mock, name, args.budget_usd, args.max_calls, seed)
+    cheap, strong = _judge_roles(task)
+    cascade = Cascade.from_config(client, cc, cheap, strong)
+    log = lambda m: print(m, flush=True)  # noqa: E731
+    try:
+        held = evaluate_heldout(task, client, cascade, members, n=args.n, seed=seed,
+                                workers=args.workers or rc.workers, log=log)
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    write_heldout(run_dir, held)
+    if args.no_dual:
+        print("dual-judge check skipped (--no-dual)")
+    elif task.stream == "image":
+        print("dual-judge check skipped for images (the second-family judge cannot see images)")
+    else:
+        dj = run_dual_judge(client, held.rows, trials=args.trials, kappa_min=cc.kappa_min, seed=seed, log=log)
+        write_dual_judge(run_dir, dj)
+        if dj.skipped:
+            print(f"dual-judge check skipped: {dj.reason}")
+    path = write_report(run_dir, with_plots=not args.no_plots)
+    print(f"held-out rows: {len(held.rows)}{' (PARTIAL: ' + str(held.stop_reason) + ')' if held.partial else ''}")
+    print(f"report: {path.relative_to(ROOT)}")
+    return 0
+
+
+def _run_report(args: argparse.Namespace) -> int:
+    from cadence.benchmark import write_report
+    from cadence.config import ROOT
+
+    run_dir = ROOT / "runs" / args.run
+    if not run_dir.is_dir():
+        print(f"FAIL: no run directory {run_dir}")
+        return 1
+    print(f"report: {write_report(run_dir, with_plots=not args.no_plots).relative_to(ROOT)}")
+    return 0
 
 
 def _run_optimize(args: argparse.Namespace) -> int:
@@ -75,10 +203,25 @@ def _run_optimize(args: argparse.Namespace) -> int:
     tracker = NullTracker() if args.no_mlflow else MlflowTracker(f"sqlite:///{(ROOT / 'mlflow.db').as_posix()}")
     print(f"Optimising task={args.task} ({'MOCK' if args.mock else 'LIVE'}) run={run_id} "
           f"gens={settings.max_gen} children={settings.children_per_gen} minibatch={settings.minibatch}", flush=True)
+    kappa = None
+    if args.calibrate:
+        import json
+
+        from cadence.calibration import run_calibration
+
+        cal = run_calibration(client, task, cfg=cc, log=lambda m: print(m, flush=True))
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "calibration.json").write_text(json.dumps(cal, indent=2, default=str), encoding="utf-8")
+        if not cal["supported"]:
+            print(f"calibration skipped: {cal['reason']}")
+        else:
+            kappa = cal.get("kappa_cascade_min")
+            if cal["flagged"]:
+                print(f"WARNING: judge(s) {', '.join(cal['flagged'])} below kappa {cc.kappa_min}; judged scores are suspect.")
     try:
         cheap, strong = ("vision_judge", "vision_judge_strong") if task.stream == "image" else ("cheap_judge", "strong_judge")
         res = optimize(task, client, Cascade.from_config(client, cc, cheap, strong), settings, run_dir, tracker=tracker,
-                       resume=args.resume, log=lambda m: print(m, flush=True))
+                       kappa=kappa, resume=args.resume, log=lambda m: print(m, flush=True))
     except (RuntimeError, FileExistsError, ValueError, BudgetExceeded) as exc:
         print(f"FAIL: {exc}")
         return 1
@@ -87,6 +230,10 @@ def _run_optimize(args: argparse.Namespace) -> int:
     print("\nPareto menu (best quality first):\n")
     print(pareto_menu(res.archive))
     print(f"\nrun directory: {run_dir.relative_to(ROOT)}")
+    if not args.no_report:
+        from cadence.benchmark import write_report
+
+        print(f"report: {write_report(run_dir).relative_to(ROOT)}  (add held-out numbers with: benchmark --run {run_id})")
     return 0
 
 
@@ -135,6 +282,12 @@ def main(argv: list[str] | None = None) -> int:
         return _run_smoke(args)
     if args.command == "run":
         return _run_optimize(args)
+    if args.command == "calibrate":
+        return _run_calibrate(args)
+    if args.command == "benchmark":
+        return _run_benchmark(args)
+    if args.command == "report":
+        return _run_report(args)
     raise SystemExit(f"unknown command: {args.command}")
 
 

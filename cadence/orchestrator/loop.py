@@ -154,7 +154,9 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
         traces[res.evaluated.candidate.id] = res.traces
         emit({"event": "evaluated", "gen": gen, "id": res.evaluated.candidate.id,
               "parents": res.evaluated.candidate.parent_ids, "template": res.evaluated.candidate.template,
-              "objectives": res.evaluated.objectives.model_dump(), "n_errors": res.n_errors, "in_archive": added})
+              "objectives": res.evaluated.objectives.model_dump(), "n_errors": res.n_errors, "in_archive": added,
+              "n_examples": res.evaluated.n_examples, "n_judged": res.n_judged, "n_escalated": res.n_escalated,
+              "judge_usd": res.judge_usd, "generation_usd": res.generation_usd})
         return added
 
     tracker.start(run_dir.name, {**cfg["settings"], "task": task.name, "resumed": resumed})
