@@ -317,3 +317,14 @@ def test_cli_rejects_stream_mismatch(capsys: pytest.CaptureFixture[str]) -> None
 
     assert main(["run", "--stream", "image", "--task", "toy", "--mock"]) == 1
     assert "stream" in capsys.readouterr().out
+
+
+def test_cli_final_sample_flag_reaches_the_loop(tmp_path: Path, monkeypatch) -> None:
+    import cadence.config as config
+    from cadence.cli import main
+
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    assert main(["run", "--task", "toy", "--mock", "--no-mlflow", "--max-gen", "1", "--minibatch", "4",
+                 "--final-sample", "6", "--run-id", "fs", "--no-report"]) == 0
+    cfg = json.loads((tmp_path / "runs/fs/config.json").read_text())
+    assert cfg["settings"]["final_sample"] == 6

@@ -26,6 +26,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     rn.add_argument("--children", type=int, default=None, help="children per generation")
     rn.add_argument("--minibatch", type=int, default=None)
     rn.add_argument("--workers", type=int, default=None)
+    rn.add_argument("--final-sample", type=int, default=None, help="examples for the final re-evaluation (default run.yaml; lower it on slow free tiers)")
     rn.add_argument("--seed", type=int, default=None)
     rn.add_argument("--run-id", default=None, help="run directory name under runs/ (default <task>-<time>)")
     rn.add_argument("--resume", action="store_true", help="continue the run in --run-id")
@@ -193,7 +194,7 @@ def _run_optimize(args: argparse.Namespace) -> int:
     settings = LoopSettings(
         seed=rc.seed if args.seed is None else args.seed, max_gen=args.max_gen if args.max_gen is not None else rc.max_gen,
         children_per_gen=args.children or rc.children_per_gen, minibatch=args.minibatch or rc.minibatch,
-        max_archive=rc.max_archive, final_sample=rc.final_sample, workers=args.workers or rc.workers,
+        max_archive=rc.max_archive, final_sample=args.final_sample or rc.final_sample, workers=args.workers or rc.workers,
         parents_per_gen=rc.parents_per_gen)
     if args.mock:
         client: object = MockClient(script={"reflector": toy_reflector} if args.task == "toy" else None, budget=budget,
