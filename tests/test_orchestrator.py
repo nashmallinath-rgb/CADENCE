@@ -328,3 +328,40 @@ def test_cli_final_sample_flag_reaches_the_loop(tmp_path: Path, monkeypatch) -> 
                  "--final-sample", "6", "--run-id", "fs", "--no-report"]) == 0
     cfg = json.loads((tmp_path / "runs/fs/config.json").read_text())
     assert cfg["settings"]["final_sample"] == 6
+
+
+def test_weak_seed_prompt_is_used_and_hidden_hint_does_not_leak_default(tmp_path: Path) -> None:
+    client = _client()
+    res = optimize(ToyTask(), client, _cascade(client), SETTINGS.model_copy(update={"max_gen": 1}), tmp_path / "w",
+                   seed_template="Weak start.", log=lambda m: None)
+    assert res.archive
+    cfg = json.loads((tmp_path / "w/config.json").read_text())
+    assert cfg["seed_template"] == "Weak start."
+    first = next(json.loads(line) for line in (tmp_path / "w/trace.jsonl").read_text().splitlines()
+                 if json.loads(line).get("id") == "seed")
+    assert first["template"] == "Weak start."
+    assert all("Answer the question." not in c.messages[-1]["content"] for c in client.calls if c.role == "reflector")
+
+
+def test_resume_requires_the_same_seed_template(tmp_path: Path) -> None:
+    c = _client()
+    short = SETTINGS.model_copy(update={"max_gen": 1})
+    optimize(ToyTask(), c, _cascade(c), short, tmp_path / "r", seed_template="A.", log=lambda m: None)
+    with pytest.raises(ValueError):
+        optimize(ToyTask(), c, _cascade(c), short, tmp_path / "r", seed_template="B.", resume=True, log=lambda m: None)
+
+
+def test_cli_seed_prompt_options(tmp_path: Path, monkeypatch, capsys) -> None:
+    import cadence.config as config
+    from cadence.cli import main
+
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    base = ["run", "--task", "toy", "--mock", "--no-mlflow", "--max-gen", "1", "--minibatch", "4", "--no-report"]
+    assert main(base + ["--seed-prompt", "weak", "--run-id", "a"]) == 1  # ToyTask has no weak prompt
+    assert "no weak seed" in capsys.readouterr().out
+    assert main(base + ["--seed-prompt", "Custom start.", "--run-id", "b"]) == 0
+    assert json.loads((tmp_path / "runs/b/config.json").read_text())["seed_template"] == "Custom start."
+    from cadence.tasks import get_task
+
+    for name in ("gsm8k", "sst2", "hotpotqa", "ifbench"):
+        assert get_task(name).weak_seed_prompt()

@@ -26,6 +26,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     rn.add_argument("--children", type=int, default=None, help="children per generation")
     rn.add_argument("--minibatch", type=int, default=None)
     rn.add_argument("--workers", type=int, default=None)
+    rn.add_argument("--seed-prompt", default="default", help="starting prompt: 'default' (the task's), 'weak' (a deliberately poor one, "
+                    "so the run shows real improvement), or literal text")
     rn.add_argument("--final-sample", type=int, default=None, help="examples for the final re-evaluation (default run.yaml; lower it on slow free tiers)")
     rn.add_argument("--seed", type=int, default=None)
     rn.add_argument("--run-id", default=None, help="run directory name under runs/ (default <task>-<time>)")
@@ -183,6 +185,14 @@ def _run_optimize(args: argparse.Namespace) -> int:
     if task.stream != args.stream:
         print(f"FAIL: task {args.task!r} belongs to stream {task.stream!r}, not {args.stream!r}")
         return 1
+    seed_template: str | None = None
+    if args.seed_prompt == "weak":
+        seed_template = task.weak_seed_prompt()
+        if seed_template is None:
+            print(f"FAIL: task {args.task!r} defines no weak seed prompt; pass literal text with --seed-prompt instead")
+            return 1
+    elif args.seed_prompt != "default":
+        seed_template = args.seed_prompt
     try:
         task.load("opt", n=1)
     except FileNotFoundError as exc:
@@ -222,7 +232,7 @@ def _run_optimize(args: argparse.Namespace) -> int:
     try:
         cheap, strong = ("vision_judge", "vision_judge_strong") if task.stream == "image" else ("cheap_judge", "strong_judge")
         res = optimize(task, client, Cascade.from_config(client, cc, cheap, strong), settings, run_dir, tracker=tracker,
-                       kappa=kappa, resume=args.resume, log=lambda m: print(m, flush=True))
+                       kappa=kappa, resume=args.resume, seed_template=seed_template, log=lambda m: print(m, flush=True))
     except (RuntimeError, FileExistsError, ValueError, BudgetExceeded) as exc:
         print(f"FAIL: {exc}")
         return 1

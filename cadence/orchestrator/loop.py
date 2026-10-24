@@ -104,15 +104,16 @@ def pareto_menu(members: list[Evaluated], max_template_chars: int = 90) -> str:
 
 def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, run_dir: Path, *,
              tracker: Tracker | None = None, kappa: float | None = None, resume: bool = False,
-             log: Callable[[str], None] = print) -> OptimizationResult:
+             seed_template: str | None = None, log: Callable[[str], None] = print) -> OptimizationResult:
     tracker = tracker or NullTracker()
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     budget = getattr(client, "budget", None)
     evaluator = Evaluator(task, client, cascade, workers=settings.workers)
+    start_template = seed_template or task.seed_prompt()  # a deliberately weak start shows the optimiser improving it
     generator = Generator(client, seed=settings.seed,
-                          task_hint=f"{task.name}. Seed prompt: {task.seed_prompt()}")
-    cfg = {"task": task.name, "settings": settings.model_dump()}
+                          task_hint=f"{task.name}. Seed prompt: {start_template}")
+    cfg = {"task": task.name, "settings": settings.model_dump(), "seed_template": start_template}
     state_p, arch_p, cfg_p, trace_p = (run_dir / n for n in ("state.json", "archive.json", "config.json", "trace.jsonl"))
 
     archive = ParetoArchive(settings.max_archive)
@@ -125,7 +126,8 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
 
     if resume and state_p.exists():
         old = json.loads(cfg_p.read_text(encoding="utf-8"))
-        strip = lambda c: {"task": c["task"], "settings": {k: v for k, v in c["settings"].items() if k != "max_gen"}}  # noqa: E731
+        strip = lambda c: {"task": c["task"], "seed_template": c.get("seed_template"),  # noqa: E731
+                           "settings": {k: v for k, v in c["settings"].items() if k != "max_gen"}}
         if strip(old) != strip(cfg):  # extending max_gen is the point of resuming; anything else changes the search
             raise ValueError("cannot resume: run directory was created with a different task/settings")
         _atomic_write(cfg_p, json.dumps(cfg, indent=2, sort_keys=True))
@@ -168,7 +170,7 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
     try:
         # generation 0: the seed prompt
         if gen_done < 0:
-            seed_c = Candidate(id="seed", template=task.seed_prompt(), generation=0)
+            seed_c = Candidate(id="seed", template=start_template, generation=0)
             seen.add(template_hash(seed_c.template))
             try:
                 res = evaluator.evaluate(seed_c, minibatch_for(opt_pool, 0, settings.minibatch))

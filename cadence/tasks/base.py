@@ -41,6 +41,10 @@ class Task(ABC):
         """A deliberately weak prompt whose real (naturally wrong) answers enrich the calibration set (None = unsupported)."""
         return None
 
+    def weak_seed_prompt(self) -> str | None:
+        """A deliberately poor starting prompt for demos (`run --seed-prompt weak`); defaults to the calibration one."""
+        return self.degraded_prompt()
+
     def corrupt_output(self, ex: Example, text: str) -> str | None:
         """A deliberately altered response, used to guarantee wrong answers in judge calibration sets (None = unsupported)."""
         return None
