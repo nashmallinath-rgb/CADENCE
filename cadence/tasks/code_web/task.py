@@ -53,6 +53,9 @@ class CodeWebTask(Task):
                 "JavaScript and no external resources. Reply with only the complete HTML document, starting with "
                 "<!DOCTYPE html>.")
 
+    def weak_seed_prompt(self) -> str | None:
+        return "Show a short HTML snippet for this."
+
     def build_request(self, template: str, ex: Example) -> GenRequest:
         req = super().build_request(template, ex)
         req.params = {**req.params, "max_tokens": MAX_TOKENS}

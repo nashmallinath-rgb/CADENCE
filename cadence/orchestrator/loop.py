@@ -159,7 +159,7 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
         emit({"event": "evaluated", "gen": gen, "id": res.evaluated.candidate.id,
               "parents": res.evaluated.candidate.parent_ids, "template": res.evaluated.candidate.template,
               "objectives": res.evaluated.objectives.model_dump(), "n_errors": res.n_errors, "in_archive": added,
-              "n_examples": res.evaluated.n_examples, "n_judged": res.n_judged, "n_escalated": res.n_escalated,
+              "n_examples": res.evaluated.n_examples, "error_samples": res.error_samples, "n_judged": res.n_judged, "n_escalated": res.n_escalated,
               "judge_usd": res.judge_usd, "generation_usd": res.generation_usd})
         return added
 
@@ -226,15 +226,21 @@ def optimize(task: Task, client: Any, cascade: Cascade, settings: LoopSettings, 
         reevaluated = False
         if archive.members:
             final_batch = opt_pool[: settings.final_sample]
+            final, kept, n_re = ParetoArchive(settings.max_archive), [], 0
             try:
-                final = ParetoArchive(settings.max_archive)
                 for m in archive.members:
-                    r = evaluator.evaluate(m.candidate, final_batch)
-                    final.add(r.evaluated)
-                archive, reevaluated = final, True
-            except (BudgetExceeded, EvaluationFailed) as exc:
+                    try:
+                        final.add(evaluator.evaluate(m.candidate, final_batch).evaluated)
+                        n_re += 1
+                    except EvaluationFailed as exc:  # keep this member's search-time numbers, re-evaluate the rest
+                        final.add(m)
+                        kept.append(m.candidate.id)
+                        emit({"event": "final_reeval_member_failed", "id": m.candidate.id, "reason": str(exc)})
+                        log(f"final re-evaluation failed for {m.candidate.id}; keeping its search-time numbers: {exc}")
+                archive, reevaluated = final, n_re > 0
+            except BudgetExceeded as exc:
                 emit({"event": "final_reeval_skipped", "reason": str(exc)})
-                log(f"final re-evaluation skipped: {exc}")
+                log(f"final re-evaluation stopped by the budget: {exc}")
         persist(gen_done)
         _atomic_write(run_dir / "menu.md", pareto_menu(archive.members) + "\n")
         emit({"event": "stop", "reason": stopped, "generations": gen_done, "final_reevaluated": reevaluated,

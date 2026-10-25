@@ -363,5 +363,55 @@ def test_cli_seed_prompt_options(tmp_path: Path, monkeypatch, capsys) -> None:
     assert json.loads((tmp_path / "runs/b/config.json").read_text())["seed_template"] == "Custom start."
     from cadence.tasks import get_task
 
-    for name in ("gsm8k", "sst2", "hotpotqa", "ifbench"):
+    for name in ("gsm8k", "sst2", "hotpotqa", "ifbench", "code_web", "audio"):
         assert get_task(name).weak_seed_prompt()
+
+
+class _Flaky(ToyTask):
+    """Fails for the given template (provider hiccup), works otherwise."""
+
+    def __init__(self, bad_template: str) -> None:
+        super().__init__()
+        self.bad = bad_template
+
+    def generate(self, client, req):  # type: ignore[no-untyped-def]
+        if req.messages[0]["content"] == self.bad:
+            raise RuntimeError("429 quota exceeded for tts")
+        return super().generate(client, req)
+
+
+def test_evaluation_failure_names_the_underlying_error() -> None:
+    client = _client()
+    with pytest.raises(EvaluationFailed, match="429 quota exceeded"):
+        Evaluator(_Flaky("x"), client, _cascade(client)).evaluate(Candidate(id="c", template="x"),
+                                                                  ToyTask().load("opt", n=4))
+    ok = Evaluator(_Flaky("zzz"), client, _cascade(client)).evaluate(Candidate(id="c", template="x"),
+                                                                    ToyTask().load("opt", n=4))
+    assert ok.error_samples == []
+
+
+def test_final_reevaluation_keeps_search_numbers_for_a_member_that_fails(tmp_path: Path) -> None:
+    pool_ids = [e.id for e in ToyTask().load("opt")]
+    first_four = set(pool_ids[:4])
+
+    class SeedBreaksOnBigSample(ToyTask):
+        """The seed prompt only works on the generation-0 minibatch (first 4 examples), so the 8-example final fails."""
+
+        def generate(self, client, req):  # type: ignore[no-untyped-def]
+            q = req.messages[-1]["content"]
+            ex_id = "toy-" + q.rsplit(" ", 1)[-1]
+            if req.messages[0]["content"] == "Answer the question." and ex_id not in first_four:
+                raise RuntimeError("tts 429")
+            return super().generate(client, req)
+
+    client = _client()
+    res = optimize(SeedBreaksOnBigSample(), client, _cascade(client),
+                   SETTINGS.model_copy(update={"max_gen": 3, "minibatch": 4, "final_sample": 8}), tmp_path / "r",
+                   log=lambda m: None)
+    events = [json.loads(line) for line in (tmp_path / "r/trace.jsonl").read_text().splitlines()]
+    failed = [e for e in events if e["event"] == "final_reeval_member_failed"]
+    assert failed and failed[0]["id"] == "seed" and "tts 429" in failed[0]["reason"]
+    by_id = {m.candidate.id: m for m in res.archive}
+    assert by_id["seed"].n_examples == 4  # kept its search-time numbers
+    assert any(m.n_examples == 8 for m in res.archive if m.candidate.id != "seed")  # the rest were re-evaluated
+    assert res.final_reevaluated

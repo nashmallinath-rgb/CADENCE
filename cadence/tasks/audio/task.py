@@ -68,6 +68,9 @@ class AudioTask(Task):
         cps = metrics.chars_per_second(str(ex.input["text"]), float(out.usage.units.get("audio_seconds", 0.0)))
         return w, cps, metrics.rate_score(cps)
 
+    def weak_seed_prompt(self) -> str | None:
+        return "Say it as fast as you possibly can"
+
     def automatic_score(self, ex: Example, out: Output) -> float | None:
         w, _cps, rate = self._parts(ex, out)
         return metrics.audio_quality(w, rate)

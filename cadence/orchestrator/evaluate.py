@@ -43,6 +43,7 @@ class EvalResult(BaseModel):
     evaluated: Evaluated
     traces: list[Trace] = Field(default_factory=list)
     n_errors: int = 0
+    error_samples: list[str] = Field(default_factory=list)  # first distinct failure messages, for diagnosis
     n_judged: int = 0
     n_escalated: int = 0
     judge_usd: float = 0.0
@@ -67,6 +68,7 @@ class Evaluator:
             raise ValueError("evaluate needs at least one example")
         done: list[tuple[Example, Output, Score]] = []
         errors = 0
+        samples: list[str] = []
         budget_hit: BudgetExceeded | None = None
 
         def work(ex: Example) -> tuple[Example, Output, Score]:
@@ -80,12 +82,16 @@ class Evaluator:
                     done.append(fut.result())
                 except BudgetExceeded as exc:
                     budget_hit = budget_hit or exc
-                except Exception:  # noqa: BLE001 - provider hiccups cost the example, not the run
+                except Exception as exc:  # noqa: BLE001 - provider hiccups cost the example, not the run
                     errors += 1
+                    msg = f"{type(exc).__name__}: {' '.join(str(exc).split())[:200]}"
+                    if msg not in samples and len(samples) < 3:
+                        samples.append(msg)
         if budget_hit is not None:
             raise budget_hit
         if not done or errors / len(examples) > MAX_ERROR_RATE:
-            raise EvaluationFailed(f"{errors}/{len(examples)} examples failed for candidate {cand.id}")
+            raise EvaluationFailed(f"{errors}/{len(examples)} examples failed for candidate {cand.id}"
+                                   + (f" (e.g. {'; '.join(samples)})" if samples else ""))
 
         quality = sum(sc.quality for _, _, sc in done) / len(done)
         cost = cost_per_1k([o.usage for _, o, _ in done])
@@ -104,7 +110,7 @@ class Evaluator:
         ]
         judge_usd = sum((sc.usage.usd for _, _, sc in done), 0.0)
         gen_usd = sum((o.usage.usd for _, o, _ in done), 0.0)
-        return EvalResult(evaluated=ev, traces=traces, n_errors=errors, n_judged=len(judged),
+        return EvalResult(evaluated=ev, traces=traces, n_errors=errors, error_samples=samples, n_judged=len(judged),
                           n_escalated=escalated, judge_usd=judge_usd, generation_usd=gen_usd)
 
 
