@@ -87,7 +87,7 @@ class Generator:
                 lines.append("LOWEST-SCORING EXAMPLES:\n" + _fmt_traces(traces))
         return GenRequest(role=self.role, messages=[{"role": "system", "content": _SYSTEM},
                                                     {"role": "user", "content": "\n\n".join(x for x in lines if x)}],
-                          params={"temperature": 0.7, "max_tokens": 700})
+                          params={"max_tokens": 700})  # no temperature: Gemini 3+ deprecates it; the default already varies replies
 
     def schedule(self, n: int, n_parents: int, gen: int) -> list[str]:
         """Operator per child; rotates with the generation so different gens start differently. Crossover needs 2 parents."""

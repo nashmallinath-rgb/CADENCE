@@ -77,6 +77,9 @@ class Gsm8kTask(TextTask):
 class HotpotQATask(TextTask):
     name = "hotpotqa"
 
+    def weak_seed_prompt(self) -> str | None:
+        return 'Answer.'
+
     def to_example(self, i: int, rec: dict[str, Any]) -> Example:
         ctx = rec.get("context", {})
         titles, sents = ctx.get("title", []), ctx.get("sentences", [])
@@ -100,6 +103,9 @@ class HotpotQATask(TextTask):
 
 class Sst2Task(TextTask):
     name = "sst2"
+
+    def weak_seed_prompt(self) -> str | None:
+        return 'Respond to the text.'
 
     def to_example(self, i: int, rec: dict[str, Any]) -> Example:
         if rec["label"] not in (0, 1):
@@ -126,6 +132,9 @@ class IfbenchTask(TextTask):
     """Instruction following with verifiable constraints. No verifier is bundled, so it is judged (rubric)."""
 
     name = "ifbench"
+
+    def weak_seed_prompt(self) -> str | None:
+        return 'Respond briefly.'
 
     def to_example(self, i: int, rec: dict[str, Any]) -> Example:
         return Example(id=f"ifbench-{rec.get('key', i)}", input={"prompt": rec["prompt"]}, reference=None,

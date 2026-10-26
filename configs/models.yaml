@@ -11,10 +11,10 @@ roles:
   cheap_judge: groq/openai/gpt-oss-20b           # first-pass judge, ~0.5s
   strong_judge: groq/openai/gpt-oss-120b         # escalations only, ~0.7s
   second_family_judge: groq/qwen/qwen3.8-27b     # held-out check: a third family (Alibaba), ~0.4s
-  image_gen: gemini/imagen-3.0-generate-002      # placeholder until Phase 7
-  tts: gemini/gemini-2.5-flash-preview-tts       # placeholder until Phase 7
+  image_gen: gemini/gemini-2.5-flash-image       # Oct 23 probe: imagen-3 is gone (404); this one answers but the free tier has no image quota (429). Needs billing, else the image stream stays mock-only
+  tts: gemini/gemini-2.5-flash-preview-tts       # verified by probe_media.py on Oct 23
   asr_or_audio_judge: gemini/gemini-2.0-flash    # placeholder until Phase 7
-  # --- Phase 7/8 roles. UNVERIFIED until you run `python scripts/probe_media.py` (model names change often). ---
+  # --- Phase 7/8 roles. tts/asr/vision/same_family verified by probe_media.py on Oct 23; image_gen is not (see above). ---
   vision_judge: gemini/gemini-3.1-flash-lite        # first-pass image judge (must accept images)
   vision_judge_strong: gemini/gemini-3.5-flash-lite # escalation image judge
   asr: groq/whisper-large-v3-turbo                  # speech-to-text for the audio WER round trip

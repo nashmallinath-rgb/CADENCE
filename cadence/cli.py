@@ -26,6 +26,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     rn.add_argument("--children", type=int, default=None, help="children per generation")
     rn.add_argument("--minibatch", type=int, default=None)
     rn.add_argument("--workers", type=int, default=None)
+    rn.add_argument("--seed-prompt", default="default", help="starting prompt: 'default' (the task's), 'weak' (a deliberately poor one, "
+                    "so the run shows real improvement), or literal text")
+    rn.add_argument("--final-sample", type=int, default=None, help="examples for the final re-evaluation (default run.yaml; lower it on slow free tiers)")
     rn.add_argument("--seed", type=int, default=None)
     rn.add_argument("--run-id", default=None, help="run directory name under runs/ (default <task>-<time>)")
     rn.add_argument("--resume", action="store_true", help="continue the run in --run-id")
@@ -50,6 +53,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     bm.add_argument("--workers", type=int, default=None)
     bm.add_argument("--no-dual", action="store_true", help="skip the second-family judge")
     bm.add_argument("--no-plots", action="store_true")
+    bm.add_argument("--no-baseline", action="store_true",
+                    help="do not also evaluate the run's starting (seed) prompt on the held-out examples")
     bm.add_argument("--mock", action="store_true")
     rp = sub.add_parser("report", help="(Re)write report.md for a run from the files in its directory")
     rp.add_argument("--run", required=True)
@@ -130,7 +135,8 @@ def _run_benchmark(args: argparse.Namespace) -> int:
     log = lambda m: print(m, flush=True)  # noqa: E731
     try:
         held = evaluate_heldout(task, client, cascade, members, n=args.n, seed=seed,
-                                workers=args.workers or rc.workers, log=log)
+                                workers=args.workers or rc.workers, log=log,
+                                baseline_template=None if args.no_baseline else cfg.get("seed_template"))
     except (ValueError, FileNotFoundError) as exc:
         print(f"FAIL: {exc}")
         return 1
@@ -182,6 +188,14 @@ def _run_optimize(args: argparse.Namespace) -> int:
     if task.stream != args.stream:
         print(f"FAIL: task {args.task!r} belongs to stream {task.stream!r}, not {args.stream!r}")
         return 1
+    seed_template: str | None = None
+    if args.seed_prompt == "weak":
+        seed_template = task.weak_seed_prompt()
+        if seed_template is None:
+            print(f"FAIL: task {args.task!r} defines no weak seed prompt; pass literal text with --seed-prompt instead")
+            return 1
+    elif args.seed_prompt != "default":
+        seed_template = args.seed_prompt
     try:
         task.load("opt", n=1)
     except FileNotFoundError as exc:
@@ -193,7 +207,7 @@ def _run_optimize(args: argparse.Namespace) -> int:
     settings = LoopSettings(
         seed=rc.seed if args.seed is None else args.seed, max_gen=args.max_gen if args.max_gen is not None else rc.max_gen,
         children_per_gen=args.children or rc.children_per_gen, minibatch=args.minibatch or rc.minibatch,
-        max_archive=rc.max_archive, final_sample=rc.final_sample, workers=args.workers or rc.workers,
+        max_archive=rc.max_archive, final_sample=args.final_sample or rc.final_sample, workers=args.workers or rc.workers,
         parents_per_gen=rc.parents_per_gen)
     if args.mock:
         client: object = MockClient(script={"reflector": toy_reflector} if args.task == "toy" else None, budget=budget,
@@ -221,7 +235,7 @@ def _run_optimize(args: argparse.Namespace) -> int:
     try:
         cheap, strong = ("vision_judge", "vision_judge_strong") if task.stream == "image" else ("cheap_judge", "strong_judge")
         res = optimize(task, client, Cascade.from_config(client, cc, cheap, strong), settings, run_dir, tracker=tracker,
-                       kappa=kappa, resume=args.resume, log=lambda m: print(m, flush=True))
+                       kappa=kappa, resume=args.resume, seed_template=seed_template, log=lambda m: print(m, flush=True))
     except (RuntimeError, FileExistsError, ValueError, BudgetExceeded) as exc:
         print(f"FAIL: {exc}")
         return 1
