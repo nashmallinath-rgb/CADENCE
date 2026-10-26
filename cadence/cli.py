@@ -53,6 +53,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     bm.add_argument("--workers", type=int, default=None)
     bm.add_argument("--no-dual", action="store_true", help="skip the second-family judge")
     bm.add_argument("--no-plots", action="store_true")
+    bm.add_argument("--no-baseline", action="store_true",
+                    help="do not also evaluate the run's starting (seed) prompt on the held-out examples")
     bm.add_argument("--mock", action="store_true")
     rp = sub.add_parser("report", help="(Re)write report.md for a run from the files in its directory")
     rp.add_argument("--run", required=True)
@@ -133,7 +135,8 @@ def _run_benchmark(args: argparse.Namespace) -> int:
     log = lambda m: print(m, flush=True)  # noqa: E731
     try:
         held = evaluate_heldout(task, client, cascade, members, n=args.n, seed=seed,
-                                workers=args.workers or rc.workers, log=log)
+                                workers=args.workers or rc.workers, log=log,
+                                baseline_template=None if args.no_baseline else cfg.get("seed_template"))
     except (ValueError, FileNotFoundError) as exc:
         print(f"FAIL: {exc}")
         return 1

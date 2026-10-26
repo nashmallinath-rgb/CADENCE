@@ -156,9 +156,20 @@ def _heldout(held: Any) -> str:
                  + ("; **partial** (" + str(held.get("stop_reason")) + ")" if held.get("partial") else "") + ".")
     lines += ["", "| member | n | held-out | opt | gap (opt - held-out) | anchored | escalation |", "|---|---|---|---|---|---|---|"]
     for m in ms:
-        lines.append(f"| `{m['candidate_id']}` | {m['n']} ({m['n_errors']} err) | {_f(m.get('heldout_quality'))} | "
-                     f"{m['opt_quality']:.3f} | {_f(m.get('gap'), '+.3f')} | {m['anchored_fraction']:.0%} | "
+        tag = " (seed baseline)" if m.get("is_baseline") else ""
+        lines.append(f"| `{m['candidate_id']}`{tag} | {m['n']} ({m['n_errors']} err) | {_f(m.get('heldout_quality'))} | "
+                     f"{_f(m.get('opt_quality'))} | {_f(m.get('gap'), '+.3f')} | {m['anchored_fraction']:.0%} | "
                      f"{m['escalation_ratio']:.0%} |")
+    base = next((m for m in ms if m.get("is_baseline") and m.get("heldout_quality") is not None), None)
+    rest = [m for m in ms if not m.get("is_baseline") and m.get("heldout_quality") is not None]
+    if base and rest:
+        best = max(rest, key=lambda m: (m["heldout_quality"], -(m.get("cost_usd_per_1k") or 0.0)))
+        line = (f"\n**Seed vs best optimised prompt (held-out):** quality {base['heldout_quality']:.3f} to "
+                f"{best['heldout_quality']:.3f}")
+        if base.get("cost_usd_per_1k") and best.get("cost_usd_per_1k") is not None:
+            line += (f", cost per 1k runs ${base['cost_usd_per_1k']:.4f} to ${best['cost_usd_per_1k']:.4f} "
+                     f"({(best['cost_usd_per_1k'] / base['cost_usd_per_1k'] - 1) * 100:+.0f}%)")
+        lines.append(line + ".")
     r = held.get("opt_vs_heldout_rank") or {}
     if r.get("spearman") is not None:
         lines.append(f"\nRank agreement between optimisation-split and held-out quality: Spearman {r['spearman']:.2f}, "
@@ -226,7 +237,13 @@ def make_plots(run_dir: Path) -> dict[str, str]:
         return {}
     try:
         members = plots.load_members(run_dir / "archive.json")
-        out = {"3D Pareto": plots.plot_pareto_3d(members, run_dir / "pareto_3d.png").name}
+        out: dict[str, str] = {}
+        try:  # the headline figure is separate so that a problem in it cannot lose the other plots
+            held = _json(run_dir / "heldout_summary.json")
+            out["Quality vs cost"] = plots.plot_pareto_front(members, run_dir / "pareto_front.png", held).name
+        except Exception:  # noqa: BLE001
+            pass
+        out["3D Pareto"] = plots.plot_pareto_3d(members, run_dir / "pareto_3d.png").name
         for p in plots.plot_pareto_2d(members, run_dir / "pareto"):
             out[Path(p).stem] = Path(p).name
         return out

@@ -67,5 +67,5 @@ def test_report_picks_up_the_real_plots_module(tmp_path: Path) -> None:
         a.add(m)
     (tmp_path / "archive.json").write_text(a.to_json(), encoding="utf-8")
     got = make_plots(tmp_path)
-    assert got["3D Pareto"] == "pareto_3d.png" and len(got) == 4
-    assert (tmp_path / "pareto_3d.png").exists()
+    assert got["3D Pareto"] == "pareto_3d.png" and got["Quality vs cost"] == "pareto_front.png" and len(got) == 5
+    assert (tmp_path / "pareto_3d.png").exists() and (tmp_path / "pareto_front.png").exists()

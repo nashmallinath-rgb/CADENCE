@@ -41,6 +41,7 @@ class DualJudgeResult(BaseModel):
     rank_agreement: dict[str, float | None] = Field(default_factory=dict)
     self_preference: dict[str, Any] = Field(default_factory=dict)
     parse_failures: int = 0
+    errors: int = 0  # rows a judge could not score because the provider failed (timeout, quota); they are skipped
     caveats: list[str] = Field(default_factory=list)
 
 
@@ -60,6 +61,35 @@ def _score(judge: Judge, row: HeldoutRow) -> tuple[float | None, int]:
     return (None if not r.trials else r.score_0_10), r.parse_failures
 
 
+MAX_CONSECUTIVE_ERRORS = 3  # a judge that fails this many rows in a row is treated as down; stop calling it
+
+
+def _safe_score(judge: Judge, row: HeldoutRow, res: DualJudgeResult, state: dict[str, Any]) -> float | None:
+    """Score one row; a provider failure (timeout, quota, 5xx) costs that row, not the whole benchmark.
+
+    BudgetExceeded and KeyError (an unconfigured role) still propagate: they mean "stop", not "skip this row".
+    Returns None when the row was skipped; raises _JudgeDown after repeated consecutive failures.
+    """
+    try:
+        s, pf = _score(judge, row)
+    except (BudgetExceeded, KeyError):
+        raise
+    except Exception as exc:  # noqa: BLE001 - litellm.Timeout, TransientLLMError, httpx errors, ...
+        res.errors += 1
+        state["streak"] = state.get("streak", 0) + 1
+        state["last"] = f"{type(exc).__name__}: {str(exc)[:100]}"
+        if state["streak"] >= MAX_CONSECUTIVE_ERRORS:
+            raise _JudgeDown(state["last"]) from exc
+        return None
+    state["streak"] = 0
+    res.parse_failures += pf
+    return s
+
+
+class _JudgeDown(Exception):
+    pass
+
+
 def run_dual_judge(client: Any, rows: Sequence[HeldoutRow], *, trials: int = 3, second_role: str = "second_family_judge",
                    same_family_role: str | None = "same_family_judge", kappa_min: float = 0.60, seed: int = 0,
                    log: Callable[[str], None] = print) -> DualJudgeResult:
@@ -74,19 +104,27 @@ def run_dual_judge(client: Any, rows: Sequence[HeldoutRow], *, trials: int = 3, 
     same: dict[int, float] = {}
     try:
         j2 = Judge(client, second_role, trials)
-        for i, r in enumerate(judged):
-            s, pf = _score(j2, r)
-            res.parse_failures += pf
-            if s is not None:
-                second[i] = s
-        if same_family_role:
+        st2: dict[str, Any] = {}
+        try:
+            for i, r in enumerate(judged):
+                s = _safe_score(j2, r, res, st2)
+                if s is not None:
+                    second[i] = s
+        except _JudgeDown as exc:
+            res.caveats.append(f"{second_role} failed {MAX_CONSECUTIVE_ERRORS} rows in a row ({exc}); "
+                               "the dual-judge check uses the rows scored before that")
+        if same_family_role and second:
             try:
                 j3 = Judge(client, same_family_role, trials)
-                for i in second:
-                    s, pf = _score(j3, judged[i])
-                    res.parse_failures += pf
-                    if s is not None:
-                        same[i] = s
+                st3: dict[str, Any] = {}
+                try:
+                    for i in second:
+                        s = _safe_score(j3, judged[i], res, st3)
+                        if s is not None:
+                            same[i] = s
+                except _JudgeDown as exc:
+                    res.caveats.append(f"{same_family_role} failed {MAX_CONSECUTIVE_ERRORS} rows in a row ({exc}); "
+                                       "self-preference gap uses the rows scored before that")
             except KeyError:
                 res.same_family_role = None
                 res.caveats.append(f"role {same_family_role!r} is not configured; self-preference gap not computed")
@@ -95,9 +133,12 @@ def run_dual_judge(client: Any, rows: Sequence[HeldoutRow], *, trials: int = 3, 
         return res
     except BudgetExceeded as exc:
         res.caveats.append(f"stopped early by the budget ({exc}); results use the rows scored so far")
+    if res.errors:
+        res.caveats.append(f"{res.errors} judge call(s) failed (provider error or timeout) and those rows were skipped")
     idx = sorted(second)
     if len(idx) < 2:
-        res.skipped, res.reason = True, "fewer than 2 rows could be scored by the second judge"
+        res.skipped, res.reason = True, ("fewer than 2 rows could be scored by the second judge"
+                                         + (f" ({res.errors} provider error(s), e.g. a timeout)" if res.errors else ""))
         return res
     p = [judged[i].primary_score * 10 for i in idx]  # type: ignore[operator]
     q = [second[i] for i in idx]
